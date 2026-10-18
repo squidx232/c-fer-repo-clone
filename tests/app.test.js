@@ -83,6 +83,67 @@ test('fluid correlation controls preserve Kelvin through unit changes and save/l
   } finally { dom.window.close(); }
 });
 
+test('friction estimator preserves initial torque and survives units, save/load and reports', () => {
+  const {dom, w, errors} = boot();
+  try {
+    w.PCPApp.activate('pump');
+    const original = w.PCPApp.state.result.pump.frictionTorque;
+    change(w, 'Pump friction model', 'ratedFraction');
+    assert.ok(Math.abs(w.PCPApp.state.result.pump.frictionTorque - original) < 1e-8);
+    change(w, 'Friction fraction of rated hydraulic torque', 30);
+    const value = w.PCPApp.state.result.pump.frictionTorque;
+    const units = w.document.querySelector('#unitSystem');
+    units.value = 'imperial'; units.dispatchEvent(new w.Event('change'));
+    assert.equal(w.PCPApp.state.result.pump.frictionTorque, value);
+    w.PCPApp.loadProject(JSON.parse(w.localStorage.getItem('pcp-designer-project-v1')));
+    assert.equal(w.PCPApp.state.project.pump.frictionFraction, 0.3);
+    let report = '';
+    w.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,';
+    w.open = () => ({document: {write: html => {report = html;}, close: () => {}}});
+    w.document.querySelector('#btnReport').click();
+    assert.match(report, /ratedFraction/);
+    assert.match(report, /30.0%/);
+    change(w, 'Pump friction model', 'specified');
+    assert.equal(w.PCPApp.state.result.pump.frictionTorque, original);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
+test('custom equipment libraries and rod properties persist with unit conversion', () => {
+  const {dom, w, errors} = boot();
+  try {
+    const save = label => [...w.document.querySelectorAll('button')].find(b => b.textContent === label).click();
+    w.PCPApp.activate('pump');
+    change(w, 'Pump model / manufacturer name', 'My measured pump');
+    save('Save pump to project library');
+    const pumpId = w.PCPApp.state.project.pump.modelId;
+    change(w, 'Pump model', 'PC-20-1200');
+    change(w, 'Pump model', pumpId);
+    assert.equal(w.PCPApp.state.project.pump.name, 'My measured pump');
+    w.PCPApp.activate('drive');
+    change(w, 'Drive model / manufacturer name', 'My drive');
+    save('Save drive to project library');
+    assert.equal(w.PCPApp.state.project.equipmentLibrary.drives.length, 1);
+    w.PCPApp.activate('rods');
+    let selects = w.document.querySelectorAll('#tab-rods table select');
+    selects[0].value = 'custom'; selects[0].dispatchEvent(new w.Event('change'));
+    selects = w.document.querySelectorAll('#tab-rods table select');
+    selects[1].value = 'custom'; selects[1].dispatchEvent(new w.Event('change'));
+    change(w, 'Section 1 yield strength', 900);
+    change(w, 'Section 1 tensile strength', 1000);
+    change(w, 'Section 1 body diameter', 26);
+    const unit = w.document.querySelector('#unitSystem');
+    unit.value = 'imperial'; unit.dispatchEvent(new w.Event('change'));
+    const saved = JSON.parse(w.localStorage.getItem('pcp-designer-project-v1'));
+    w.PCPApp.loadProject(saved);
+    assert.equal(w.PCPApp.state.project.rods.sections[0].yieldStrength, 900e6);
+    assert.ok(Math.abs(w.PCPApp.state.project.rods.sections[0].diameter - 0.026) < 1e-12);
+    assert.equal(w.PCPApp.state.project.equipmentLibrary.pumps[0].name, 'My measured pump');
+    assert.ok(w.PCPApp.state.result.ok);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
 test('legacy projects retain results and new settings survive report generation', () => {
   const {dom, w, errors} = boot();
   try {

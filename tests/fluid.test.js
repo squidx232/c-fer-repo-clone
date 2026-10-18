@@ -7,6 +7,12 @@ const C = require('../js/catalog.js');
 const U = require('../js/units.js');
 const close = (a, b, tol = 1e-12) => assert.ok(Math.abs(a - b) <= tol, `${a} != ${b}`);
 
+test('six captured original-engine helper outputs match the SI implementation', () => {
+  const reference = require('./fixtures/original-engine-viscosity.json');
+  for (const v of reference.deadOil) close(F.deadOilViscosity(v.temperatureC + 273.15, v.api).viscosity, v.originalCp / 1000);
+  for (const v of reference.liveOil) close(F.liveOilViscosity(v.deadOilCp / 1000, v.solutionGor).viscosity, v.originalCp / 1000);
+});
+
 test('absolute temperatures convert with offsets and round-trip', () => {
   close(U.toDisplay(273.15, 'temperature', 'metric'), 0);
   close(U.toDisplay(273.15, 'temperature', 'imperial'), 32);

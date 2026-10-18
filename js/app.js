@@ -107,7 +107,7 @@
   }
 
   function textField(path, label, multiline) {
-    var input = el(multiline ? 'textarea' : 'input', { type: 'text', rows: multiline ? 4 : undefined });
+    var input = el(multiline ? 'textarea' : 'input', { type: 'text', rows: multiline ? 4 : undefined, 'aria-label': label });
     input.value = getPath(state.project, path) || '';
     input.addEventListener('change', function () { setPath(state.project, path, input.value); store(); if (path === 'meta.name') $('#projectName').value = input.value; });
     return el('div', { class: 'field' }, [el('label', { text: label }), el('div', { class: 'ctrl' }, [input])]);
@@ -317,15 +317,32 @@
 
   // ------------------------------------------------------------------ pump
 
+  function equipmentList(kind) {
+    var defaults = kind === 'pumps' ? C.PUMPS : C.DRIVES;
+    var library = state.project.equipmentLibrary || {};
+    return defaults.concat(library[kind] || []);
+  }
+
+  function saveEquipment(kind) {
+    var item = C.clone(kind === 'pumps' ? state.project.pump : state.project.drive);
+    if (!state.project.equipmentLibrary) state.project.equipmentLibrary = {};
+    var list = state.project.equipmentLibrary[kind] || [];
+    var id = 'user-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    item.id = id; item.modelId = id;
+    list.push(item); state.project.equipmentLibrary[kind] = list;
+    if (kind === 'pumps') state.project.pump = C.clone(item); else state.project.drive = C.clone(item);
+    recompute(); activate(state.tab);
+  }
+
   function renderPump() {
     var p = $('#tab-pump'); p.innerHTML = '';
     var pm = state.project.pump;
     header('Pump', 'Progressing cavity pump geometry, ratings and operating speed.').forEach(function (n) { if (n) p.appendChild(n); });
-    var opts = C.PUMPS.map(function (x) { return { value: x.id, label: x.name + '  (' + U.format(x.displacement, 'displacement', sys(), 1) + ', ' + U.format(x.ratedLift, 'head', sys(), 0) + ' lift)' }; })
+    var opts = equipmentList('pumps').map(function (x) { return { value: x.id, label: x.name + '  (' + U.format(x.displacement, 'displacement', sys(), 1) + ', ' + U.format(x.ratedLift, 'head', sys(), 0) + ' lift)' }; })
       .concat([{ value: 'custom', label: 'Custom / modified' }]);
     function markCustom() { pm.modelId = 'custom'; var s = $('#pumpModelSel select'); if (s) s.value = 'custom'; }
     var sel = selectField('Pump model', opts, pm.modelId, function (v) {
-      var c = C.byId(C.PUMPS, v);
+      var c = C.byId(equipmentList('pumps'), v);
       if (c) state.project.pump = Object.assign({ modelId: v }, C.clone(c));
       else pm.modelId = 'custom';
       renderPump(); recompute();
@@ -333,16 +350,37 @@
     sel.id = 'pumpModelSel';
     p.appendChild(card('Pump selection', [grid([
       sel,
+      textField('pump.name', 'Pump model / manufacturer name'),
+      textField('pump.elastomer', 'Elastomer description (metadata only)'),
       numField('pump.displacement', 'Displacement', 'displacement', { min: 1e-9, onchange: markCustom }),
       numField('pump.ratedLift', 'Rated lift (water)', 'head', { min: 1, onchange: markCustom }),
       numField('pump.rotorDiameter', 'Rotor minor diameter', 'diameter', { min: 0.005, onchange: markCustom }),
       numField('pump.eccentricity', 'Eccentricity', 'diameter', { min: 0, onchange: markCustom }),
-      numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }),
+      (pm.frictionModel || 'specified') === 'specified' ? numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }) : null,
       numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Used by the legacy model only; corrected using the reference viscosity and exponent below.' }),
       numField('pump.maxSpeed', 'Max recommended speed', 'speed', { min: 1, onchange: markCustom }),
       readField('Displacement per revolution', (sys() === 'metric' ? U.fmtNumber(E.displacementPerRev(pm) * 1e6, 1) + ' cm³/rev' : U.fmtNumber(E.displacementPerRev(pm) / 1.6387064e-5, 2) + ' in³/rev')),
       readField('Rated differential pressure', f(E.ratedPressure(pm), 'pressure'))
     ])]));
+
+    p.appendChild(el('div', { class: 'btn-row' }, [el('button', { class: 'btn', text: 'Save pump to project library', onclick: function () { saveEquipment('pumps'); } })]));
+    var guidance = E.frictionGuidance(pm);
+    var frictionFields = [selectField('Pump friction model', [
+      { value: 'specified', label: 'Specified friction torque (existing model)' },
+      { value: 'ratedFraction', label: 'Fraction of rated hydraulic torque (estimate)' }
+    ], pm.frictionModel || 'specified', function (v) {
+      pm.frictionModel = v;
+      if (v === 'ratedFraction' && pm.frictionFraction === undefined) {
+        var ratedTorque = E.displacementPerRev(pm) * E.ratedPressure(pm) / (2 * Math.PI);
+        pm.frictionFraction = ratedTorque > 0 ? (pm.frictionTorque || 0) / ratedTorque : 0;
+      }
+      renderPump(); recompute();
+    })];
+    if (pm.frictionModel === 'ratedFraction') {
+      frictionFields.push(numField('pump.frictionFraction', 'Friction fraction of rated hydraulic torque', 'percent', { min: 0, onchange: function () { renderPump(); } }),
+        readField('Estimated pump friction torque', f(E.pumpTorque(pm, 0).friction, 'torque')));
+    }
+    p.appendChild(card('Pump friction estimate', [grid(frictionFields), el('p', { class: 'hint', text: 'Manual guidance for ' + guidance.category + ' pumps: ' + (guidance.minFraction * 100) + '–' + (guidance.maxFraction * 100) + '% of hydraulic torque at rated pressure. Guidance assumes standard fit/geometries and medium NBR; it is not a swell or temperature model. Switching to estimate mode initially preserves the specified torque.' })]));
 
     var model = pm.performanceModel || 'legacy';
     var performanceFields = [selectField('Performance model', [
@@ -402,8 +440,8 @@
     ])]));
 
     var resolved = E.resolveRodSections(state.project).sections;
-    var gradeOpts = C.ROD_GRADES.map(function (g) { return { value: g.id, label: g.name }; });
-    var sizeOpts = C.ROD_SIZES.map(function (s) { return { value: s.id, label: s.name }; });
+    var gradeOpts = C.ROD_GRADES.map(function (g) { return { value: g.id, label: g.name }; }).concat([{ value: 'custom', label: 'Custom material' }]);
+    var sizeOpts = C.ROD_SIZES.map(function (s) { return { value: s.id, label: s.name }; }).concat([{ value: 'custom', label: 'Custom dimensions' }]);
     var tbl = el('table', { class: 'edit' });
     tbl.appendChild(el('thead', null, [el('tr', null, ['#', 'Grade', 'Size', 'Length (' + uu('length') + ')', 'Top – Bottom MD', 'Body Ø (' + uu('diameter') + ')',
       'Coupling OD (' + uu('diameter') + ')', 'Weight (' + uu('massLength') + ')', 'Min. yield (' + uu('stress') + ')', ''].map(function (h) { return el('th', { text: h }); }))]));
@@ -415,7 +453,18 @@
       function sel(opts, key) {
         var e = el('select');
         opts.forEach(function (o) { e.appendChild(el('option', { value: o.value, text: o.label, selected: o.value === s[key] })); });
-        e.addEventListener('change', function () { s[key] = e.value; renderRods(); recompute(); });
+        e.addEventListener('change', function () {
+          if (e.value === 'custom' && key === 'size') {
+            var base = C.byId(C.ROD_SIZES, s.size) || C.ROD_SIZES[2];
+            s.diameter = base.diameter; s.couplingOd = base.couplingOd; s.massPerLength = base.massPerLength;
+          }
+          if (e.value === 'custom' && key === 'grade') {
+            var material = C.byId(C.ROD_GRADES, s.grade) || C.ROD_GRADES[2];
+            s.yieldStrength = material.yield; s.tensileStrength = material.tensile;
+          }
+          if (e.value !== 'custom' && key === 'size') { delete s.diameter; delete s.couplingOd; delete s.massPerLength; }
+          s[key] = e.value; renderRods(); recompute();
+        });
         return e;
       }
       var len = el('input', { type: 'number', step: 'any', value: clean(disp(isLast ? (r ? r.length : 0) : s.length, 'length')), readonly: isLast, title: isLast ? 'Bottom section fills to pump depth' : '' });
@@ -439,6 +488,23 @@
       ]));
     });
     tbl.appendChild(tb);
+    var customSections = [];
+    rods.sections.forEach(function (s, i) {
+      var fields = [];
+      var prefix = 'rods.sections.' + i + '.';
+      if (s.size === 'custom') fields = fields.concat([
+        textField(prefix + 'sizeName', 'Section ' + (i + 1) + ' size name'),
+        numField(prefix + 'diameter', 'Section ' + (i + 1) + ' body diameter', 'diameter', { min: 0.001 }),
+        numField(prefix + 'couplingOd', 'Section ' + (i + 1) + ' coupling diameter', 'diameter', { min: 0.001 }),
+        numField(prefix + 'massPerLength', 'Section ' + (i + 1) + ' mass per length', 'massLength', { min: 0.001 })
+      ]);
+      if (s.grade === 'custom') fields = fields.concat([
+        textField(prefix + 'gradeName', 'Section ' + (i + 1) + ' material name'),
+        numField(prefix + 'yieldStrength', 'Section ' + (i + 1) + ' yield strength', 'stress', { min: 1 }),
+        numField(prefix + 'tensileStrength', 'Section ' + (i + 1) + ' tensile strength', 'stress', { min: 1 })
+      ]);
+      if (fields.length) customSections.push(card('Custom properties — section ' + (i + 1), [grid(fields)]));
+    });
     p.appendChild(card('Rod sections (top → bottom)', [
       el('div', { class: 'table-wrap' }, [tbl]),
       el('div', { class: 'btn-row' }, [el('button', { class: 'btn', type: 'button', text: '+ Add section above bottom', onclick: function () {
@@ -447,6 +513,7 @@
         renderRods(); recompute();
       } })])
     ]));
+    customSections.forEach(function (section) { p.appendChild(section); });
   }
 
   // ------------------------------------------------------------------ drive
@@ -455,20 +522,22 @@
     var p = $('#tab-drive'); p.innerHTML = '';
     var dr = state.project.drive;
     header('Surface Drive', 'Drive head and motor ratings used to check the polished-rod loads.').forEach(function (n) { if (n) p.appendChild(n); });
-    var opts = C.DRIVES.map(function (d) { return { value: d.id, label: d.name }; }).concat([{ value: 'custom', label: 'Custom / modified' }]);
+    var opts = equipmentList('drives').map(function (d) { return { value: d.id, label: d.name }; }).concat([{ value: 'custom', label: 'Custom / modified' }]);
     function markCustom() { dr.modelId = 'custom'; }
     p.appendChild(card('Drive selection', [grid([
       selectField('Drive model', opts, dr.modelId, function (v) {
-        var d = C.byId(C.DRIVES, v);
+        var d = C.byId(equipmentList('drives'), v);
         if (d) state.project.drive = Object.assign({ modelId: v }, C.clone(d)); else dr.modelId = 'custom';
         renderDrive(); recompute();
       }),
+      textField('drive.name', 'Drive model / manufacturer name'),
       numField('drive.maxTorque', 'Max torque', 'torque', { min: 1, onchange: markCustom }),
       numField('drive.maxPower', 'Motor power rating', 'power', { min: 1, onchange: markCustom }),
       numField('drive.maxSpeed', 'Max speed', 'speed', { min: 1, onchange: markCustom }),
       numField('drive.maxAxialLoad', 'Thrust bearing rating', 'force', { min: 1, onchange: markCustom }),
       numField('drive.efficiency', 'Drive + motor efficiency', 'percent', { min: 0.1, max: 1, onchange: markCustom })
     ])]));
+    p.appendChild(el('div', { class: 'btn-row' }, [el('button', { class: 'btn', text: 'Save drive to project library', onclick: function () { saveEquipment('drives'); } })]));
     var util = el('div');
     p.appendChild(card('Drive utilisation', [util]));
     renderDriveUtil(util);
@@ -741,6 +810,9 @@
       row('Pump', (pm.name || pm.modelId) + (pm.modelId === 'custom' ? ' (custom)' : '')),
       row('Displacement / rated lift', f(pm.displacement, 'displacement') + ' / ' + f(pm.ratedLift, 'head')),
       row('Performance model', pm.performanceModel || 'legacy'),
+      row('Pump friction model', pm.frictionModel || 'specified'),
+      row('Pump friction torque', f(E.pumpTorque(pm, 0).friction, 'torque')),
+      row('Rated hydraulic friction fraction', pm.frictionModel === 'ratedFraction' ? (pm.frictionFraction * 100).toFixed(1) + '%' : 'not used'),
       row('Efficiency reference speed', pm.referenceSpeed === undefined ? 'not specified' : pm.referenceSpeed + ' rpm'),
       row('Efficiency at zero / rated pressure', pm.efficiencyAtRated === undefined ? 'not specified' : ((pm.efficiencyAtZero === undefined ? '—' : (pm.efficiencyAtZero * 100).toFixed(1) + '%') + ' / ' + (pm.efficiencyAtRated * 100).toFixed(1) + '%')),
       row('Slip reference viscosity / exponent', f(pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity, 'viscosity') + ' / ' + (pm.viscosityExponent === undefined ? ((!pm.performanceModel || pm.performanceModel === 'legacy') ? 0.5 : 0.33) : pm.viscosityExponent)),

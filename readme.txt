@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 33 calculation and DOM integration tests (node --test)
+  npm test             -> 47 calculation, original-output, equipment and DOM tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -104,6 +104,96 @@ Specified mixture viscosity remains the default; old files keep prior results.
 Temperature units are affine: Kelvin internally, Celsius/Fahrenheit in the UI.
 There is NO depth temperature profile, emulsion inversion, non-Newtonian model,
 free gas handling or full multiphase-flow implementation in this increment.
+
+Obfuscated method mapping and measurable parity
+----------------------------------------------
+  python3 scripts/map-engine-obfuscation.py
+Writes a local, ignored method inventory: source SHA-256, line ranges, method
+signatures, Math calls, state-machine case counts and decompiler warnings. The
+current engine has 199 top-level classes, 1683 matched method headers and 4039
+warning comments. These are heuristic syntactic counts, NOT resolved-method or
+parity percentages. Nested classes, compiler artifacts and overloads complicate
+interpretation. No claim is made that decompiled methods are valid/recompilable.
+
+The explicit coverage ledger is tests/fixtures/parity-coverage.json. Candidate
+bench-test families tb/tc/s6 are identified, but input mappings and branches are
+unresolved; tp/rx contain interpolation/log expressions with incomplete domain
+mapping. Existing soft-string, trajectory and hydraulic tests are NOT evidence
+of vendor parity. Third-party engines and licensed Windows UI were not executed.
+
+A new reference-case checker makes numerical comparisons reproducible:
+  node scripts/check-reference-cases.js --template > REFERENCE.json
+  node scripts/check-reference-cases.js REFERENCE.json
+Supply a complete SI project, independent expected outputs, absolute/relative
+tolerances, application version and capture description. Templates deliberately
+contain null expected values and fail until measured outputs are supplied. No
+independent vendor case is bundled. The checker exits nonzero on discrepancies
+and preserves calculated design errors/warnings. It only checks supplied numeric
+outputs and cases, NOT warning, UI, file-format or full-system parity.
+
+The Pump tab also offers a manual-guided friction estimate:
+  frictionTorque = frictionFraction * displacementPerRev * ratedPressure / (2*pi)
+This is a fraction of RATED hydraulic torque, constant with operating pressure;
+it is not a fraction of operating torque. Switching from specified mode initializes
+the fraction to preserve current friction torque. Switching back restores the
+specified value. Reports include the selected model, fraction and resulting torque.
+Manual guidance (standard fit/geometries, medium NBR):
+  capacity < 0.4 m3/d/rpm: 20..50%; 0.4..0.8 inclusive: 15..25%; >0.8: 5..20%.
+Guidance is advisory; nonnegative out-of-range fractions are accepted with a
+warning. Temperature, swell and lubrication remain unmodeled. This is manual-
+guided behavior, not a newly deobfuscated thermal/fit algorithm. Old projects
+retain specified friction torque and unchanged results.
+
+Run all Python tooling tests with:
+  python3 -m unittest discover -s tests -p 'test_*.py'
+There are 6 Python tests (5 extraction + 1 synthetic obfuscation-inventory test).
+Full 100% replication has NOT been established: acceptance requires complete
+scope inventory, branch/unit/sentinel mapping, independent licensed reference
+runs across model combinations and edge cases, agreed output tolerances, and
+browser end-to-end/visual checks. See the coverage ledger for remaining gaps.
+
+Original engine execution and equipment scope (latest update)
+-----------------------------------------------------------
+The earlier statements that NO vendor engine was executed describe previous
+increments and are now superseded for SIX numeric helper calls only. The original
+PcPump.Engine assembly ran successfully under local .NET 8.0.32 on Linux:
+  sy.e: dead-oil viscosity at (60 C,30 API), (80 C,20 API), (100 C,40 API)
+  sy.i: live-oil viscosity with 100 cP dead oil and Rs 0,100,300 standard m3/m3
+Outputs are committed as small numeric fixtures with provenance in
+  tests/fixtures/original-engine-viscosity.json
+The web implementations match after converting original cP outputs to Pa*s.
+This is NOT full well-case, licensing, warning-branch, desktop or catalog parity.
+The warning accumulator is null only for known in-range calls. The probe neither
+patches assemblies nor stubs dependencies nor bypasses license checks. Loading
+assemblies executes code: run only trusted authorized targets in the sandbox.
+To reproduce (artifacts remain under ignored .local-analysis):
+  bash scripts/analysis-tools.sh dotnet build scripts/engine-probe/EngineProbe.csproj \
+    -o "$PWD/.local-analysis/engine-probe" \
+    -p:BaseIntermediateOutputPath="$PWD/.local-analysis/engine-probe-obj/"
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    "$PWD/.local-analysis/app-files"
+The desktop app also requires WindowsDesktop.App; the isolated harness does not
+launch that app. No claim is made that the complete simulation works on Linux.
+
+Equipment options are NOT a fully extracted PC-PUMP catalog. Defaults remain
+10 generic pumps, 5 generic drives, 5 starter grades and 6 starter rod sizes.
+The recovered equipment.db is not plain readable SQLite. Data-layer tracing
+shows SQLite-backed EquipmentModel loading, but its container/opening requirements
+remain unresolved. No fabricated manufacturer records have been added.
+
+The UI now supports:
+  - Named custom pumps and drives saved to a project-local reusable library;
+    entries appear in their model selectors and persist in JSON/localStorage.
+  - Custom rod section size/name, body and coupling diameters, mass/length;
+    custom material name, yield and tensile strengths, with SI validation.
+  - Selecting custom properties seeds from the current preset. Selecting a
+    standard size again removes custom geometry overrides. Continuous rod still
+    uses calculated steel mass and body diameter for contact (existing model).
+Custom properties feed rod loads, stress limits and reports. Tensile strength
+is stored/validated but no new fatigue calculation is implied. Elastomer text is
+metadata only. Named pump/drive libraries do not import vendor catalogs or bench
+curves. Invalid rod dimensions/strengths fail analysis. No equipment entry is
+certified merely by being saved to the user library.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
