@@ -3,6 +3,40 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Independent catalog-path investigation (2026-10-18)
+  Inspected the installed executables, bundled manual's Online Equipment
+  Update Checking workflow, custom-equipment workflow and parsed sample files.
+  The documented updater replaces the database file; no readable equipment
+  export was found in these inspected paths. This is not proof that no vendor
+  export API exists. Manufacturer q6 loading remains security-context dependent.
+  No licensing results, activation state or database passwords were bypassed.
+
+  Added original-parser sample snapshot mode (after building Windows probe):
+    EngineProbe.dll --sample-equipment <MSI application root> <separate output>
+  Run under the original Windows dotnet.exe/Wine, without compatibility patches
+  or application activation. Uses normal original registry/profile seed helpers.
+  Extracted 29 equipment-definition CONTAINERS from all 11 samples, zero parse
+  failures; every source file hash unchanged. Values are raw/unverified units.
+  Public properties only, bounded depth, no hidden security fields/method calls.
+
+  Actual result: all 29 parsed pump models have Company=<None>, displacement=0
+  and pressure rating=0. These are UNPOPULATED MODELS, not usable manufacturer
+  records. Analysis descriptions naming pumps are NOT pump specifications.
+  Rod/surface obfuscated types expose little through public properties; raw
+  snapshots do not claim complete equipment detail or independent simulation.
+
+  Local snapshots: .local-analysis/sample-equipment/sample-equipment.json
+  Summarize safely:
+    python3 scripts/summarize-sample-equipment.py \
+      .local-analysis/sample-equipment/sample-equipment.json \
+      --output .local-analysis/sample-equipment/summary.json
+  Summarizer never marks snapshots as importable manufacturer records, even if
+  fields are populated. Current populated-pump count is ZERO. No vendor records
+  or assets are committed, and no empty/default equipment enters the web app.
+  Catalog access remains unresolved pending normal licensing or an authorized
+  external readable equipment export; these inspected alternatives did not
+  provide the manufacturer catalog.
+
 Catalog startup breakthrough (2026-10-18)
   The original application's cryptographic startup crash was overcome in an
   isolated local deployment. Its REAL Key Management window now opens.
