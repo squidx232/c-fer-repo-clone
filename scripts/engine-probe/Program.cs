@@ -4,13 +4,17 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
 
-if (args.Length != 1) throw new ArgumentException("Expected extracted application directory");
+if (args.Length < 1 || args.Length > 2) throw new ArgumentException("Expected extracted application directory and optional runtime-probe output directory");
 var directory = Path.GetFullPath(args[0]);
 AssemblyLoadContext.Default.Resolving += (_, name) => {
     var file = Directory.EnumerateFiles(directory, "*.dll")
-        .FirstOrDefault(p => string.Equals(Path.GetFileNameWithoutExtension(p), name.Name, StringComparison.OrdinalIgnoreCase));
+        .FirstOrDefault(p => string.Equals(Path.GetFileNameWithoutExtension(p).Replace('_', '-'), name.Name, StringComparison.OrdinalIgnoreCase));
     return file == null ? null : AssemblyLoadContext.Default.LoadFromAssemblyPath(file);
 };
+if (args.Length == 2) {
+    RuntimePaths.Run(directory, Path.GetFullPath(args[1]));
+    return;
+}
 var report = new Dictionary<string, object?> {
     ["runtime"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
     ["platform"] = System.Runtime.InteropServices.RuntimeInformation.OSDescription,

@@ -195,6 +195,58 @@ metadata only. Named pump/drive libraries do not import vendor catalogs or bench
 curves. Invalid rod dimensions/strengths fail analysis. No equipment entry is
 certified merely by being saved to the user library.
 
+Catalog, complete simulation and desktop runtime investigation
+------------------------------------------------------------
+New reproducible investigation mode (use the scoped build command above):
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    "$PWD/.local-analysis/app-files" "$PWD/.local-analysis/runtime-paths"
+The second argument enables original database/sample/UI dependency probes.
+The catalog is copied before opening, so distributed equipment.db is untouched.
+Results/logs stay ignored locally. The probe reports independent success/blocked
+statuses; process success does NOT mean all targets opened. It executes original
+code and must run only with authorized files in an isolated sandbox.
+
+Verified original catalog chain:
+  q5(string path, bool readOnly) -> q5.a -> q3.a -> EquipmentModel(SQLiteConnection).
+The data layer uses EF6/System.Data.SQLite; it contains password-aware opening
+branches. No passwords were extracted, no checks patched, no database protection
+was bypassed. Installed real EventLog, Resources.Extensions and ConfigurationManager
+NuGet dependencies resolved the initial missing-assembly errors. The ORIGINAL
+catalog constructor now fails in Cfer.Logging.Logger initialization on missing
+kernel32.dll under Linux. The original underlying database-open failure can be
+masked by this logger error; no conclusion about database validity is justified.
+
+Verified original sample path:
+  la.a(string path, auc warnings) -> akm project.
+Attempting the bundled ss_1.pcp fails on PresentationCore 8.0 (WPF). No sample
+project was loaded. The desktop worker calls:
+  r9.a(bool, akm, aua, q8, akk, af3, int = -1).
+It needs a real loaded project, callback/adapter, equipment context, configuration
+and unit preferences. The app orchestration also performs security checks. We
+have NOT invoked a complete simulation, supplied fake contexts, or bypassed
+security. A Windows-compatible runtime with WPF and the normal application
+initialization is the concrete next requirement, not a guessed license failure.
+Native SQLite/provider requirements may be discovered after initialization works.
+
+Original desktop resources can be inventoried without running WPF:
+  python3 scripts/inventory-desktop-catalog.py
+The probe read 131 resource names/lengths, including 130 BAML resources (views,
+charts, themes and dialogs, NOT necessarily 130 screens). No asset bytes are
+committed. The local inventory also maps 30 catalog entity tables and properties,
+including pump, rod, material, drive heads/housings, gearbox, hydraulic pump/motor,
+cables, casing/tubing, rod guides, brakes, rod-whip and centrifugal-pump curves.
+This establishes schema/scope, not equipment rows, units, manufacturer ratings or
+UI state/behavior parity. Full database extraction and desktop parity remain open.
+
+Remaining roadmap, in dependency order:
+  1. Run these unchanged probes in a compatible Windows/WPF environment.
+  2. Initialize the catalog using its normal original loading path and inspect rows.
+  3. Load original sample projects, establish callback/config/unit contexts, then
+     execute the normal authorized simulation flow and capture full outputs.
+  4. Map each desktop input/state to those outputs; test numerical AND UI parity.
+No full simulations or manufacturer rows are claimed in this investigation.
+Python suite now includes 7 tests (extractor, method map and schema inventory).
+
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
   - Fluid: dead oil + water mixture density; Newtonian viscosity; no free gas.
