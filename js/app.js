@@ -284,7 +284,9 @@
     var p = $('#tab-production'); p.innerHTML = '';
     var pr = state.project.production;
     header('Production & Fluid', 'Wellhead pressures, pump intake condition and produced fluid properties.').forEach(function (n) { if (n) p.appendChild(n); });
-    var fl = E.fluidProps(pr);
+    var fl;
+    try { fl = E.fluidProps(pr); }
+    catch (error) { fl = { oilSg: E.oilSg(pr.oilApi), density: NaN, viscosity: NaN }; }
     p.appendChild(card('Pressures', [grid([
       numField('production.tubingHeadPressure', 'Tubing head pressure', 'pressure', { min: 0 }),
       numField('production.casingHeadPressure', 'Casing head pressure', 'pressure', { min: 0 }),
@@ -298,7 +300,12 @@
       numField('production.oilApi', 'Oil gravity', 'none', { min: 5, max: 60, hint: '°API', onchange: function () { renderProduction(); } }),
       numField('production.waterCut', 'Water cut', 'percent', { min: 0, max: 1, onchange: function () { renderProduction(); } }),
       numField('production.waterSg', 'Water specific gravity', 'none', { min: 0.95, max: 1.3, onchange: function () { renderProduction(); } }),
-      numField('production.viscosity', 'Effective fluid viscosity at pump', 'viscosity', { min: 1e-4, hint: 'Newtonian viscosity of the produced emulsion/mixture.' }),
+      selectField('Viscosity model', [{ value: 'specified', label: 'Specified mixture viscosity (existing model)' }, { value: 'beggsRobinson', label: 'Beggs–Robinson oil + linear water mixing' }], pr.viscosityModel || 'specified', function (v) { pr.viscosityModel = v; renderProduction(); recompute(); }),
+      (pr.viscosityModel || 'specified') === 'specified'
+        ? numField('production.viscosity', 'Effective fluid viscosity at pump', 'viscosity', { min: 1e-4, hint: 'Newtonian viscosity of the produced emulsion/mixture.' })
+        : numField('production.fluidTemperature', 'Uniform fluid temperature', 'temperature', { min: 260, max: 600, onchange: function () { renderProduction(); } }),
+      pr.viscosityModel === 'beggsRobinson' ? numField('production.waterViscosity', 'Water viscosity at fluid temperature', 'viscosity', { min: 1e-4, onchange: function () { renderProduction(); } }) : null,
+      pr.viscosityModel === 'beggsRobinson' ? readField('Calculated effective mixture viscosity', f(fl.viscosity, 'viscosity'), 'Uniform temperature; no gas, emulsion inversion or thermal profile. Viscosity floor: 0.1 cP.') : null,
       readField('Oil specific gravity', U.fmtNumber(fl.oilSg, 4)),
       readField('Mixture density', f(fl.density, 'density')),
       readField('Mixture gradient', U.format(fl.density * E.constants.G * (sys() === 'metric' ? 1 / 1000 : 0.3048 / 6894.757293), 'none', sys(), 4, false) + (sys() === 'metric' ? ' kPa/m' : ' psi/ft'))
@@ -331,11 +338,43 @@
       numField('pump.rotorDiameter', 'Rotor minor diameter', 'diameter', { min: 0.005, onchange: markCustom }),
       numField('pump.eccentricity', 'Eccentricity', 'diameter', { min: 0, onchange: markCustom }),
       numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }),
-      numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Scaled linearly with ΔP and by (1 cP/μ)^0.5.' }),
+      numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Used by the legacy model only; corrected using the reference viscosity and exponent below.' }),
       numField('pump.maxSpeed', 'Max recommended speed', 'speed', { min: 1, onchange: markCustom }),
       readField('Displacement per revolution', (sys() === 'metric' ? U.fmtNumber(E.displacementPerRev(pm) * 1e6, 1) + ' cm³/rev' : U.fmtNumber(E.displacementPerRev(pm) / 1.6387064e-5, 2) + ' in³/rev')),
       readField('Rated differential pressure', f(E.ratedPressure(pm), 'pressure'))
     ])]));
+
+    var model = pm.performanceModel || 'legacy';
+    var performanceFields = [selectField('Performance model', [
+      { value: 'legacy', label: 'Legacy rated-slip model (existing projects)' },
+      { value: 'linear', label: 'Linear pressure-dependent efficiency' },
+      { value: 'quadratic', label: 'Quadratic pressure-dependent efficiency' },
+      { value: 'constant', label: 'Constant volumetric efficiency' }
+    ], model, function (v) {
+      pm.performanceModel = v;
+      if (pm.referenceSpeed === undefined) pm.referenceSpeed = 100;
+      if (pm.referenceViscosity === undefined) pm.referenceViscosity = 0.001;
+      if (pm.viscosityExponent === undefined) pm.viscosityExponent = v === 'legacy' ? 0.5 : 0.33;
+      if (pm.efficiencyAtZero === undefined) pm.efficiencyAtZero = 1;
+      if (pm.efficiencyAtRated === undefined) pm.efficiencyAtRated = 0.4;
+      renderPump(); recompute();
+    })];
+    if (model === 'linear' || model === 'quadratic') {
+      performanceFields.push(
+        numField('pump.referenceSpeed', 'Efficiency reference speed', 'speed', { min: 1 }),
+        numField('pump.efficiencyAtZero', 'Efficiency at zero differential pressure', 'percent', { min: 0, max: 1 }),
+        numField('pump.efficiencyAtRated', 'Efficiency at rated differential pressure', 'percent', { min: 0, max: 1 })
+      );
+    } else if (model === 'constant') {
+      performanceFields.push(numField('pump.efficiencyAtRated', 'Constant volumetric efficiency', 'percent', { min: 0, max: 1 }));
+    }
+    if (model !== 'constant') {
+      performanceFields.push(
+        numField('pump.referenceViscosity', 'Slip reference viscosity', 'viscosity', { min: 0.0001, value: function () { return pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity; } }),
+        numField('pump.viscosityExponent', 'Slip viscosity exponent', 'none', { min: 0, max: 1, value: function () { return pm.viscosityExponent === undefined ? (model === 'legacy' ? 0.5 : 0.33) : pm.viscosityExponent; }, hint: '0 disables viscosity correction; documented PC-PUMP default is 0.33. Calibrate against measured data.' })
+      );
+    }
+    p.appendChild(card('Volumetric performance', [grid(performanceFields), el('p', { class: 'hint', text: 'Linear/quadratic models convert reference-speed efficiency to speed-independent slip, then apply (reference viscosity / fluid viscosity)^exponent. Existing files retain the original 0.5 exponent. These equations have been traced; full PC-PUMP system parity has not been validated.' })]));
 
     var res = el('span', { class: 'hint' });
     p.appendChild(card('Operating speed', [grid([
@@ -693,12 +732,18 @@
       row('Tubing / casing head pressure', f(pd.tubingHeadPressure, 'pressure') + ' / ' + f(pd.casingHeadPressure, 'pressure')),
       row(pd.intakeMode === 'fluidLevel' ? 'Fluid level (MD)' : 'Pump intake pressure', pd.intakeMode === 'fluidLevel' ? f(pd.fluidLevel, 'length') : f(pd.intakePressure, 'pressure')),
       row('Oil gravity / water cut', pd.oilApi + ' °API / ' + (pd.waterCut * 100).toFixed(1) + ' %'),
-      row('Viscosity', f(pd.viscosity, 'viscosity')),
+      row('Viscosity model', pd.viscosityModel || 'specified'),
+      row('Effective viscosity', r && r.ok ? f(r.fluid.viscosity, 'viscosity') : 'invalid fluid inputs'),
+      row('Fluid temperature', pd.viscosityModel === 'beggsRobinson' ? f(pd.fluidTemperature, 'temperature') : 'not used'),
       row('Target rate', f(pd.targetRate, 'flow'))
     ]));
     html.push(tbl('Pump & drive', [
       row('Pump', (pm.name || pm.modelId) + (pm.modelId === 'custom' ? ' (custom)' : '')),
       row('Displacement / rated lift', f(pm.displacement, 'displacement') + ' / ' + f(pm.ratedLift, 'head')),
+      row('Performance model', pm.performanceModel || 'legacy'),
+      row('Efficiency reference speed', pm.referenceSpeed === undefined ? 'not specified' : pm.referenceSpeed + ' rpm'),
+      row('Efficiency at zero / rated pressure', pm.efficiencyAtRated === undefined ? 'not specified' : ((pm.efficiencyAtZero === undefined ? '—' : (pm.efficiencyAtZero * 100).toFixed(1) + '%') + ' / ' + (pm.efficiencyAtRated * 100).toFixed(1) + '%')),
+      row('Slip reference viscosity / exponent', f(pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity, 'viscosity') + ' / ' + (pm.viscosityExponent === undefined ? ((!pm.performanceModel || pm.performanceModel === 'legacy') ? 0.5 : 0.33) : pm.viscosityExponent)),
       row('Speed', pr.speed + ' rpm'),
       row('Drive', (dr.name || dr.modelId) + ' — ' + f(dr.maxTorque, 'torque') + ', ' + f(dr.maxPower, 'power'))
     ]));

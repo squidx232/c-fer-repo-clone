@@ -4,7 +4,8 @@
  *   length m, pressure Pa, force N, torque N·m, flow m³/s, viscosity Pa·s,
  *   density kg/m³, power W, stress Pa, mass-per-length kg/m, dogleg rad/m.
  * Each quantity defines a display unit for the "metric" and "imperial" systems
- * with a multiplicative factor: SI = display * factor.
+ * with SI = display * factor + offset (offset defaults to zero).
+ * Absolute temperature uses Kelvin internally and °C/°F for display.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -23,6 +24,7 @@
     torque:      { metric: { u: 'N·m',      f: 1 },             imperial: { u: 'ft·lbf',    f: 1.355817948 } },
     flow:        { metric: { u: 'm³/d',     f: 1 / 86400 },     imperial: { u: 'bbl/d',     f: 0.158987295 / 86400 } },
     displacement:{ metric: { u: 'm³/d/100rpm', f: 1 / 86400 },  imperial: { u: 'bbl/d/100rpm', f: 0.158987295 / 86400 } },
+    temperature: { metric: { u: '°C', f: 1, offset: 273.15 }, imperial: { u: '°F', f: 5 / 9, offset: 273.15 - 32 * 5 / 9 } },
     viscosity:   { metric: { u: 'cP',       f: 0.001 },         imperial: { u: 'cP',        f: 0.001 } },
     density:     { metric: { u: 'kg/m³',    f: 1 },             imperial: { u: 'lb/ft³',    f: 16.01846337 } },
     power:       { metric: { u: 'kW',       f: 1000 },          imperial: { u: 'hp',        f: 745.6998716 } },
@@ -46,13 +48,15 @@
   /** Convert an SI value to the display unit of the given system. */
   function toDisplay(value, quantity, system) {
     if (value === null || value === undefined || !isFinite(value)) return value;
-    return value / def(quantity, system).f;
+    var d = def(quantity, system);
+    return (value - (d.offset || 0)) / d.f;
   }
 
   /** Convert a display value to SI. */
   function fromDisplay(value, quantity, system) {
     if (value === null || value === undefined || !isFinite(value)) return value;
-    return value * def(quantity, system).f;
+    var d = def(quantity, system);
+    return value * d.f + (d.offset || 0);
   }
 
   function unit(quantity, system) {
