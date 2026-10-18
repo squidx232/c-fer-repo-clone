@@ -1,2 +1,4 @@
 node_modules/
 .DS_Store
+# Local reverse-engineering tools and analysis artifacts (not shipped with the app)
+.local-analysis/
