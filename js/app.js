@@ -318,9 +318,7 @@
   // ------------------------------------------------------------------ pump
 
   function equipmentList(kind) {
-    var defaults = kind === 'pumps' ? C.PUMPS : C.DRIVES;
-    var library = state.project.equipmentLibrary || {};
-    return defaults.concat(library[kind] || []);
+    return window.PCPEquipment.list(state.project, kind);
   }
 
   function saveEquipment(kind) {
@@ -440,8 +438,8 @@
     ])]));
 
     var resolved = E.resolveRodSections(state.project).sections;
-    var gradeOpts = C.ROD_GRADES.map(function (g) { return { value: g.id, label: g.name }; }).concat([{ value: 'custom', label: 'Custom material' }]);
-    var sizeOpts = C.ROD_SIZES.map(function (s) { return { value: s.id, label: s.name }; }).concat([{ value: 'custom', label: 'Custom dimensions' }]);
+    var gradeOpts = equipmentList('rodGrades').map(function (g) { return { value: g.id, label: g.name }; }).concat([{ value: 'custom', label: 'Custom material' }]);
+    var sizeOpts = equipmentList('rodSizes').map(function (s) { return { value: s.id, label: s.name }; }).concat([{ value: 'custom', label: 'Custom dimensions' }]);
     var tbl = el('table', { class: 'edit' });
     tbl.appendChild(el('thead', null, [el('tr', null, ['#', 'Grade', 'Size', 'Length (' + uu('length') + ')', 'Top – Bottom MD', 'Body Ø (' + uu('diameter') + ')',
       'Coupling OD (' + uu('diameter') + ')', 'Weight (' + uu('massLength') + ')', 'Min. yield (' + uu('stress') + ')', ''].map(function (h) { return el('th', { text: h }); }))]));
@@ -455,11 +453,11 @@
         opts.forEach(function (o) { e.appendChild(el('option', { value: o.value, text: o.label, selected: o.value === s[key] })); });
         e.addEventListener('change', function () {
           if (e.value === 'custom' && key === 'size') {
-            var base = C.byId(C.ROD_SIZES, s.size) || C.ROD_SIZES[2];
+            var base = C.byId(equipmentList('rodSizes'), s.size) || C.ROD_SIZES[2];
             s.diameter = base.diameter; s.couplingOd = base.couplingOd; s.massPerLength = base.massPerLength;
           }
           if (e.value === 'custom' && key === 'grade') {
-            var material = C.byId(C.ROD_GRADES, s.grade) || C.ROD_GRADES[2];
+            var material = C.byId(equipmentList('rodGrades'), s.grade) || C.ROD_GRADES[2];
             s.yieldStrength = material.yield; s.tensileStrength = material.tensile;
           }
           if (e.value !== 'custom' && key === 'size') { delete s.diameter; delete s.couplingOd; delete s.massPerLength; }
@@ -473,7 +471,7 @@
         if (!isFinite(v) || v < 0) { len.classList.add('invalid'); return; }
         s.length = U.fromDisplay(v, 'length', sys()); renderRods(); recompute();
       });
-      var size = C.byId(C.ROD_SIZES, s.size), grade = C.byId(C.ROD_GRADES, s.grade);
+      var size = C.byId(equipmentList('rodSizes'), s.size), grade = C.byId(equipmentList('rodGrades'), s.grade);
       tb.appendChild(el('tr', null, [
         el('td', { text: String(i + 1) }), el('td', null, [sel(gradeOpts, 'grade')]), el('td', null, [sel(sizeOpts, 'size')]), el('td', null, [len]),
         el('td', { text: r ? U.format(r.top, 'length', sys(), 0, false) + ' – ' + U.format(r.bottom, 'length', sys(), 0, false) : 'not used' }),
@@ -878,11 +876,56 @@
     download(safeName() + '_results.csv', [head].concat(lines).join('\n'), 'text/csv');
   }
 
+  function renderEquipment() {
+    var panel = $('#tab-equipment'); panel.innerHTML = '';
+    header('Equipment Catalog', 'Load authorized equipment exports in the explicit-SI portable format. This does not decode the original equipment.db.').forEach(function (n) { if (n) panel.appendChild(n); });
+    var input = el('textarea', { class: 'paste', 'aria-label': 'Equipment catalog JSON', placeholder: 'Paste schemaVersion 1 equipment catalog JSON' });
+    var message = el('p', { role: 'status' });
+    panel.appendChild(card('Import equipment', [input, el('div', { class: 'btn-row' }, [
+      el('button', { class: 'btn primary', text: 'Import catalog', onclick: function () {
+        try {
+          if (input.value.length > 5 * 1024 * 1024) throw new Error('Catalog exceeds 5 MiB limit.');
+          state.project.equipmentLibrary = window.PCPEquipment.merge(state.project, JSON.parse(input.value));
+          recompute(); renderEquipment();
+        } catch (error) { message.textContent = error.message; }
+      } }),
+      el('button', { class: 'btn', text: 'Show catalog format', onclick: function () {
+        input.value = JSON.stringify({schemaVersion: 1, units: 'SI', provenance: {source: 'replace with authorized supplier/source'},
+          pumps: [Object.assign({}, C.PUMPS[0], {id: 'example-pump', name: 'Illustrative only — replace with verified data'})],
+          drives: [], rodGrades: [], rodSizes: []}, null, 2);
+      } })
+    ]), message]));
+    var table = el('table', { class: 'data' });
+    table.appendChild(el('thead', null, [el('tr', null, ['Type', 'Built-in generic', 'Project/imported'].map(function (h) { return el('th', { text: h }); }))]));
+    var counts = {pumps: C.PUMPS.length, drives: C.DRIVES.length, rodGrades: C.ROD_GRADES.length, rodSizes: C.ROD_SIZES.length};
+    Object.keys(counts).forEach(function (kind) { table.appendChild(el('tr', null, [el('td', {text: kind}), el('td', {text: String(counts[kind])}), el('td', {text: String(equipmentList(kind).length - counts[kind])})])); });
+    panel.appendChild(card('Available specifications', [table]));
+    var imports = (state.project.equipmentLibrary || {}).imports || [];
+    panel.appendChild(card('Import provenance', [el('ul', null, imports.map(function (record) { return el('li', {text: record.source + ' — ' + record.importedAt}); }))]));
+  }
+
+  function renderCoverage() {
+    var panel = $('#tab-coverage'); panel.innerHTML = '';
+    header('Parity & Runtime', 'Readiness information, not a claim of complete PC-PUMP replication.').forEach(function (n) { if (n) panel.appendChild(n); });
+    var rows = [
+      ['Web well analysis', 'Available: simplified single-phase soft-string model.'],
+      ['Original engine numeric helpers', 'Six captured dead/live-oil viscosity outputs matched.'],
+      ['Manufacturer equipment database', 'Not extracted. Original loader blocked on Windows kernel32/logger initialization on Linux. Portable SI imports are available.'],
+      ['Original complete simulation', 'Not executed. Sample parser requires WPF PresentationCore; original calculation contexts still need mapping.'],
+      ['Desktop/UI parity', '130 BAML resources inventoried, not 130 completed screens. WPF PresentationFramework required.'],
+      ['Remaining models', 'Bench-test normalization, full multiphase/thermal, rod fatigue/wear and native project formats remain unresolved.']
+    ];
+    var table = el('table', {class: 'data'});
+    rows.forEach(function (row) { table.appendChild(el('tr', null, [el('th', {text: row[0]}), el('td', {text: row[1]})])); });
+    panel.appendChild(card('Verified coverage', [table]));
+    panel.appendChild(card('Original runtime prerequisites', [el('p', {text: 'Use the Windows readiness script with an authorized installed application, .NET 8 SDK and Desktop Runtime. It runs unchanged original loader probes, not the full simulation, and does not patch licensing or supply fake contexts.'}), el('code', {text: 'scripts/run-windows-readiness.ps1 -ApplicationDirectory <installed-app> -OutputDirectory <results>'})]));
+  }
+
   // ------------------------------------------------------------------ app shell
 
   var RENDER = {
     project: renderProject, wellbore: renderWellbore, production: renderProduction, pump: renderPump, rods: renderRods,
-    drive: renderDrive, results: renderResults, curves: renderCurves, sweep: renderSweep, table: renderTable
+    drive: renderDrive, equipment: renderEquipment, coverage: renderCoverage, results: renderResults, curves: renderCurves, sweep: renderSweep, table: renderTable
   };
   var OUTPUT_TABS = { results: 1, curves: 1, sweep: 1, table: 1 };
 

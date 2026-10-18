@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 47 calculation, original-output, equipment and DOM tests (node --test)
+  npm test             -> 51 calculation, original-output, equipment and DOM tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -246,6 +246,58 @@ Remaining roadmap, in dependency order:
   4. Map each desktop input/state to those outputs; test numerical AND UI parity.
 No full simulations or manufacturer rows are claimed in this investigation.
 Python suite now includes 7 tests (extractor, method map and schema inventory).
+
+Portable catalogs and runtime coverage screens (latest increment)
+----------------------------------------------------------------
+Equipment Catalog is a new web tab. Paste an authorized portable JSON export,
+review the built-in/imported record counts and source provenance. Imports merge
+atomically with project libraries and persist with the project. Duplicates,
+reserved/built-in IDs, missing SI units, missing provenance, nonfinite ratings,
+invalid grade strengths and impossible coupling geometry are rejected. No vendor
+rows are bundled, no units are guessed, and equipment.db is NOT decoded here.
+Supported schema (units are ALWAYS SI, regardless of UI display system):
+  schemaVersion: 1
+  units: "SI"
+  provenance: {source: "supplier/export/version description"}
+  pumps: [{id,name,displacement,ratedLift,rotorDiameter,maxSpeed,
+           eccentricity,frictionTorque,slipAtRated}]
+  drives: [{id,name,maxTorque,maxPower,maxSpeed,maxAxialLoad,efficiency}]
+  rodGrades: [{id,name,yield,tensile}]
+  rodSizes: [{id,name,diameter,couplingOd,massPerLength}]
+Lists may be omitted; at least one supported entry is required. IDs must be
+unique per type and cannot override built-ins or existing project records.
+Displacement is m3/s at 100 rpm; ratedLift is m of fresh water; dimensions m;
+torque N*m, power W, axial load N, strengths Pa, mass/length kg/m, efficiency a
+0..1 fraction. maxSpeed is rpm. Imported pumps use the legacy rated-slip model;
+optional bench curves/performance modes and other unrecognized fields are NOT
+imported. Use the Pump editor to configure supported performance modes afterward.
+The Show catalog format button provides an explicitly illustrative template,
+not manufacturer data. Max pasted JSON size is 5 MiB, max 5000 entries per type.
+Imported rod grades/sizes feed the same resolver as presets in the UI and engine.
+
+Parity & Runtime is another new tab. It exposes verified coverage, unresolved
+models and original runtime prerequisites without marking them implemented. It is
+not a live connection to the original engine; the web analysis stays independent.
+
+Windows readiness runner:
+  scripts/run-windows-readiness.ps1 -ApplicationDirectory <authorized-installed-app>
+By default results go under .local-analysis/windows-readiness. A custom output
+directory must also be inside .local-analysis. Requires Windows, .NET 8 SDK and
+Windows Desktop Runtime. It builds the probe with ProbeWindows=true, uses an
+actual net8.0-windows/UseWPF runtime target, checks required files, applies an
+execution timeout, and exits nonzero when any required loader probe is blocked.
+It neither installs/activates PC-PUMP nor patches its code/license checks. It
+copies equipment.db before probing, reports original errors, and tests sample
+loading plus WPF availability. It does NOT execute a complete well simulation.
+Both default net8.0 and net8.0-windows probe builds were verified with zero
+warnings/errors in this Linux sandbox; Windows execution/PowerShell runtime
+behavior remains untested here. Existing six numeric helper checks still pass.
+
+Not delivered as complete: manufacturer database rows, complete original well
+simulation, the unresolved calculation families, or full desktop/UI parity.
+Those remain dependent on original Windows initialization and independent
+reference outputs; the new screens make the status explicit rather than hiding
+missing engineering capabilities behind generic options.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.

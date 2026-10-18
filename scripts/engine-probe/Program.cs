@@ -1,5 +1,6 @@
 // Invokes narrow numeric methods in the ORIGINAL engine; no patching or stubbing.
 // Input assemblies are executable code: run only in the isolated local sandbox.
+using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
