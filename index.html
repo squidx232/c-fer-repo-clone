@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCP Designer — Progressing Cavity Pump System Analysis</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" width="28" height="28" aria-hidden="true">
+        <path d="M8 4 C 20 10, 20 14, 8 20 C 20 26, 20 30, 8 36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M32 4 C 20 10, 20 14, 32 20 C 20 26, 20 30, 32 36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+      </svg>
+      <span>PCP&nbsp;Designer</span>
+    </div>
+    <input id="projectName" class="project-name" aria-label="Project name">
+    <div class="toolbar">
+      <button id="btnNew" type="button" title="New project">New</button>
+      <button id="btnOpen" type="button" title="Open project file (.json)">Open</button>
+      <button id="btnSave" type="button" title="Save project file (.json)">Save</button>
+      <button id="btnCsv" type="button" title="Export node results to CSV">Export CSV</button>
+      <button id="btnReport" type="button" class="primary" title="Printable design report">Report</button>
+      <label class="units">Units
+        <select id="unitSystem">
+          <option value="metric">Metric</option>
+          <option value="imperial">Imperial</option>
+        </select>
+      </label>
+      <button id="btnTheme" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+      <input id="fileInput" type="file" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="tabs" id="tabs" role="tablist">
+      <button data-tab="project" class="active">Project</button>
+      <button data-tab="wellbore">Wellbore</button>
+      <button data-tab="production">Production &amp; Fluid</button>
+      <button data-tab="pump">Pump</button>
+      <button data-tab="rods">Rod String</button>
+      <button data-tab="drive">Surface Drive</button>
+      <div class="tab-sep"></div>
+      <button data-tab="results">Load Analysis</button>
+      <button data-tab="curves">Pump Curves</button>
+      <button data-tab="sweep">Speed Sweep</button>
+      <button data-tab="table">Results Table</button>
+    </nav>
+
+    <main class="content" id="content">
+      <section id="tab-project" class="tab-panel active"></section>
+      <section id="tab-wellbore" class="tab-panel"></section>
+      <section id="tab-production" class="tab-panel"></section>
+      <section id="tab-pump" class="tab-panel"></section>
+      <section id="tab-rods" class="tab-panel"></section>
+      <section id="tab-drive" class="tab-panel"></section>
+      <section id="tab-results" class="tab-panel"></section>
+      <section id="tab-curves" class="tab-panel"></section>
+      <section id="tab-sweep" class="tab-panel"></section>
+      <section id="tab-table" class="tab-panel"></section>
+    </main>
+
+    <aside class="summary" id="summary" aria-live="polite"></aside>
+  </div>
+
+  <footer class="footer">
+    Engineering screening tool. Results are estimates from simplified models (no free-gas handling, generic pump catalog) and must be verified by a qualified engineer.
+  </footer>
+
+  <script src="js/units.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
