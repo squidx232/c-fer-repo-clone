@@ -3,6 +3,41 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Catalog-only investigation (2026-10-18)
+  Corrected a diagnostic assumption: q5 is the CUSTOM database API; the
+  manufacturer catalog uses q6(string,string), which requests a read-only
+  SQLite connection through q3. Earlier q5 failures were not a direct test
+  of the manufacturer loader. The new --catalog-only mode tests q6 instead.
+
+  The installer distributes TWO distinct catalogs:
+    Database/equipment.db: 2,310,144 bytes (standard)
+    Database_Educational/equipment.db: 245,760 bytes (educational)
+  Neither has a plaintext SQLite header. Do not merge the two or treat the
+  educational file as a decoded/full manufacturer catalog.
+
+  Commands:
+    python3 scripts/catalog-requirements.py \
+      --application '.local-analysis/msi-layout/C-FER Technologies/PC-Pump'
+    bash scripts/run-catalog-probe.sh
+  Inventory: .local-analysis/catalog-requirements.json
+  Execution report: .local-analysis/catalog-only/catalog-only.json
+  The inventory maps 30 model tables and 46 q8 API operations. It contains
+  schema/requirements, NOT equipment rows. All derived data stays ignored.
+  The runtime probe works on copies and verifies original SHA-256 hashes.
+  It queries counts only if the original q6 constructor actually succeeds;
+  undocumented/obfuscated return types retain their original identifiers.
+
+  Actual result: BOTH original q6 attempts fail q6 -> q3.a -> q1.a(bool),
+  where application/security context ace.b() is uninitialized. No equipment
+  collections were returned. The manufacturer loader is NOT independently
+  runnable before normal security setup. The prior desktop run reaches that
+  setup but Wine lacks the required SP800_108_CTR_HMAC cryptographic algorithm.
+  This does not establish license validity/invalidity. No passwords, activation
+  tokens or security singletons are fabricated/extracted/replaced.
+
+  Catalog remains blocked: no manufacturer rows imported into the web app.
+  This work is catalog-only; simulation/UI parity is unchanged.
+
 Latest original-runtime investigation (2026-10-18)
   Fixed the staging ambiguity: scripts/stage-msi-application.py uses msiinfo
   exports of the actual File, Component and Directory tables, not assembly
