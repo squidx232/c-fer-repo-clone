@@ -299,6 +299,49 @@ Those remain dependent on original Windows initialization and independent
 reference outputs; the new screens make the status explicit rather than hiding
 missing engineering capabilities behind generic options.
 
+Wine 11 original-loader execution (latest evidence)
+-------------------------------------------------
+The prior Windows/WPF dependency blocker has now been partly overcome: workspace-
+local Wine 11 runs official Windows .NET 8.0.32 + WindowsDesktop 8.0.32 bundles.
+Microsoft runtime archives were SHA-512 checked against official release metadata;
+WineHQ packages were SHA-256 checked against the WineHQ jammy Packages listing.
+No global installation or vendor binary modification was made. Ubuntu Wine 6
+was first tested but aborted at unimplemented GetProcessGroupAffinity; Wine 11
+successfully loads PresentationFramework and enumerates desktop resources.
+
+Reproducible invocation (requires the installed local bundles and Windows probe):
+  bash scripts/run-wine-readiness.sh
+The command clears stale reports, uses a separate Wine prefix, applies a timeout,
+and exits nonzero for blocked original loaders. It is NOT a simulation bridge.
+Current detailed report: .local-analysis/wine11-loader-results/runtime-paths.json
+  desktop: success (WPF assembly availability only, not an interactive desktop)
+  desktopResources: success
+  catalog: blocked, q5 -> q3 -> q1.a throws NullReferenceException
+  sampleProject: blocked, k7.a -> Enumerable.Max on empty warning collection
+Adding the actual System.Threading.AccessControl 10.0.0 dependency resolved the
+intermediate logging assembly failure. Stack retrieval now safely preserves the
+original error even when dependency resolution prevents diagnostic formatting.
+
+The catalog's q1.a accesses ace.b() application/security state; the harness has
+not initialized that normal application context. This is NOT proof of a licence
+denial, password failure or corrupted database. No secrets were extracted, no
+security branch was patched, and no fake context/return value was injected.
+The sample parse failure requires further original initialization/format tracing;
+warning checks were NOT disabled and no successful project parse is claimed.
+The dashboard now reflects these deeper failures instead of the superseded
+missing-WPF errors. Complete database extraction, full original simulation,
+remaining models and desktop behavioral/visual parity are STILL NOT complete.
+
+Local bundle sources used (not committed):
+  https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/main/binary-amd64/Packages.gz
+  https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine/wine-stable-amd64_11.0.0.0~jammy-1_amd64.deb
+  https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine/wine-stable_11.0.0.0~jammy-1_amd64.deb
+  https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json
+Extract WineHQ packages locally under .local-analysis/wine11/root and both win-x64
+runtime zip bundles into .local-analysis/dotnet-windows. The loader's libunwind8
+is extracted under .local-analysis/wine/root; all tool homes/prefixes stay local.
+These are observed compatible components, not an automated general installer.
+
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
   - Fluid: dead oil + water mixture density; Newtonian viscosity; no free gas.

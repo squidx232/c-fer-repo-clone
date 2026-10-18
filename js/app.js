@@ -910,9 +910,9 @@
     var rows = [
       ['Web well analysis', 'Available: simplified single-phase soft-string model.'],
       ['Original engine numeric helpers', 'Six captured dead/live-oil viscosity outputs matched.'],
-      ['Manufacturer equipment database', 'Not extracted. Original loader blocked on Windows kernel32/logger initialization on Linux. Portable SI imports are available.'],
-      ['Original complete simulation', 'Not executed. Sample parser requires WPF PresentationCore; original calculation contexts still need mapping.'],
-      ['Desktop/UI parity', '130 BAML resources inventoried, not 130 completed screens. WPF PresentationFramework required.'],
+      ['Manufacturer equipment database', 'Not extracted. Under Wine 11 the original loader reaches q1.a but fails on an uninitialized application/security context. Portable SI imports are available.'],
+      ['Original complete simulation', 'Not executed. WPF now loads under Wine 11, but sample parsing fails in k7.a on an empty warnings collection; original contexts remain unresolved.'],
+      ['Desktop/UI parity', '130 BAML resources inventoried, not 130 completed screens. PresentationFramework loads under Wine 11; desktop workflows and visuals are not validated.'],
       ['Remaining models', 'Bench-test normalization, full multiphase/thermal, rod fatigue/wear and native project formats remain unresolved.']
     ];
     var table = el('table', {class: 'data'});

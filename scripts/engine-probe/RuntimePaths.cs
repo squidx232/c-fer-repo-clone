@@ -5,13 +5,19 @@ using System.Text.Json;
 
 internal static class RuntimePaths
 {
+    private static string? SafeStack(Exception error)
+    {
+        try { return error.StackTrace; }
+        catch { return "Stack unavailable due to missing dependency."; }
+    }
+
     internal static object Attempt(Func<object?> action)
     {
         try { return new {status = "success", result = action()}; }
         catch (Exception error) {
             var errors = new List<object>();
             for (Exception? e = error; e != null; e = e.InnerException)
-                errors.Add(new {type = e.GetType().FullName, message = e.Message});
+                errors.Add(new {type = e.GetType().FullName, message = e.Message, stack = SafeStack(e)});
             return new {status = "blocked", errors};
         }
     }
