@@ -12,7 +12,7 @@ function boot() {
   });
   const w = dom.window, errors = [], charts = [];
   w.addEventListener('error', e => errors.push(e.message));
-  for (const script of ['units', 'catalog', 'fluid', 'engine']) {
+  for (const script of ['units', 'catalog', 'equipment-library', 'fluid', 'engine']) {
     w.eval(fs.readFileSync(path.join(root, 'js', script + '.js'), 'utf8'));
   }
   // Rendering is tested separately in a real browser; here assert chart data wiring.
@@ -140,6 +140,37 @@ test('custom equipment libraries and rod properties persist with unit conversion
     assert.ok(Math.abs(w.PCPApp.state.project.rods.sections[0].diameter - 0.026) < 1e-12);
     assert.equal(w.PCPApp.state.project.equipmentLibrary.pumps[0].name, 'My measured pump');
     assert.ok(w.PCPApp.state.result.ok);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
+test('catalog screen imports authorized SI specs, rejects duplicates and persists imported rod choices', () => {
+  const {dom, w, errors} = boot();
+  try {
+    w.PCPApp.activate('equipment');
+    const catalog = {schemaVersion: 1, units: 'SI', provenance: {source: 'synthetic UI test export'},
+      rodGrades: [Object.assign({}, w.PCPCatalog.ROD_GRADES[2], {id: 'supplier-grade'})],
+      rodSizes: [Object.assign({}, w.PCPCatalog.ROD_SIZES[2], {id: 'supplier-size'})]};
+    const perform = () => {
+      w.document.querySelector('[aria-label="Equipment catalog JSON"]').value = JSON.stringify(catalog);
+      [...w.document.querySelectorAll('#tab-equipment button')].find(b => b.textContent === 'Import catalog').click();
+    };
+    perform();
+    assert.equal(w.PCPApp.state.project.equipmentLibrary.rodGrades.length, 1);
+    perform();
+    assert.match(w.document.querySelector('#tab-equipment [role="status"]').textContent, /already exists/);
+    w.PCPApp.activate('rods');
+    const select = (index, value) => {
+      const field = w.document.querySelectorAll('#tab-rods table select')[index];
+      field.value = value; field.dispatchEvent(new w.Event('change'));
+    };
+    select(0, 'supplier-grade'); select(1, 'supplier-size');
+    assert.ok(w.PCPApp.state.result.ok);
+    assert.equal(w.PCPApp.state.result.sections[0].grade.id, 'supplier-grade');
+    w.PCPApp.loadProject(JSON.parse(w.localStorage.getItem('pcp-designer-project-v1')));
+    assert.equal(w.PCPApp.state.result.sections[0].size.id, 'supplier-size');
+    w.PCPApp.activate('coverage');
+    assert.match(w.document.querySelector('#tab-coverage').textContent, /Not executed/);
     assert.deepEqual(errors, []);
   } finally { dom.window.close(); }
 });

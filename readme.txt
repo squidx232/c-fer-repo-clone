@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 47 calculation, original-output, equipment and DOM tests (node --test)
+  npm test             -> 51 calculation, original-output, equipment and DOM tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -194,6 +194,222 @@ is stored/validated but no new fatigue calculation is implied. Elastomer text is
 metadata only. Named pump/drive libraries do not import vendor catalogs or bench
 curves. Invalid rod dimensions/strengths fail analysis. No equipment entry is
 certified merely by being saved to the user library.
+
+Catalog, complete simulation and desktop runtime investigation
+------------------------------------------------------------
+New reproducible investigation mode (use the scoped build command above):
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    "$PWD/.local-analysis/app-files" "$PWD/.local-analysis/runtime-paths"
+The second argument enables original database/sample/UI dependency probes.
+The catalog is copied before opening, so distributed equipment.db is untouched.
+Results/logs stay ignored locally. The probe reports independent success/blocked
+statuses; process success does NOT mean all targets opened. It executes original
+code and must run only with authorized files in an isolated sandbox.
+
+Verified original catalog chain:
+  q5(string path, bool readOnly) -> q5.a -> q3.a -> EquipmentModel(SQLiteConnection).
+The data layer uses EF6/System.Data.SQLite; it contains password-aware opening
+branches. No passwords were extracted, no checks patched, no database protection
+was bypassed. Installed real EventLog, Resources.Extensions and ConfigurationManager
+NuGet dependencies resolved the initial missing-assembly errors. The ORIGINAL
+catalog constructor now fails in Cfer.Logging.Logger initialization on missing
+kernel32.dll under Linux. The original underlying database-open failure can be
+masked by this logger error; no conclusion about database validity is justified.
+
+Verified original sample path:
+  la.a(string path, auc warnings) -> akm project.
+Attempting the bundled ss_1.pcp fails on PresentationCore 8.0 (WPF). No sample
+project was loaded. The desktop worker calls:
+  r9.a(bool, akm, aua, q8, akk, af3, int = -1).
+It needs a real loaded project, callback/adapter, equipment context, configuration
+and unit preferences. The app orchestration also performs security checks. We
+have NOT invoked a complete simulation, supplied fake contexts, or bypassed
+security. A Windows-compatible runtime with WPF and the normal application
+initialization is the concrete next requirement, not a guessed license failure.
+Native SQLite/provider requirements may be discovered after initialization works.
+
+Original desktop resources can be inventoried without running WPF:
+  python3 scripts/inventory-desktop-catalog.py
+The probe read 131 resource names/lengths, including 130 BAML resources (views,
+charts, themes and dialogs, NOT necessarily 130 screens). No asset bytes are
+committed. The local inventory also maps 30 catalog entity tables and properties,
+including pump, rod, material, drive heads/housings, gearbox, hydraulic pump/motor,
+cables, casing/tubing, rod guides, brakes, rod-whip and centrifugal-pump curves.
+This establishes schema/scope, not equipment rows, units, manufacturer ratings or
+UI state/behavior parity. Full database extraction and desktop parity remain open.
+
+Remaining roadmap, in dependency order:
+  1. Run these unchanged probes in a compatible Windows/WPF environment.
+  2. Initialize the catalog using its normal original loading path and inspect rows.
+  3. Load original sample projects, establish callback/config/unit contexts, then
+     execute the normal authorized simulation flow and capture full outputs.
+  4. Map each desktop input/state to those outputs; test numerical AND UI parity.
+No full simulations or manufacturer rows are claimed in this investigation.
+Python suite now includes 7 tests (extractor, method map and schema inventory).
+
+Portable catalogs and runtime coverage screens (latest increment)
+----------------------------------------------------------------
+Equipment Catalog is a new web tab. Paste an authorized portable JSON export,
+review the built-in/imported record counts and source provenance. Imports merge
+atomically with project libraries and persist with the project. Duplicates,
+reserved/built-in IDs, missing SI units, missing provenance, nonfinite ratings,
+invalid grade strengths and impossible coupling geometry are rejected. No vendor
+rows are bundled, no units are guessed, and equipment.db is NOT decoded here.
+Supported schema (units are ALWAYS SI, regardless of UI display system):
+  schemaVersion: 1
+  units: "SI"
+  provenance: {source: "supplier/export/version description"}
+  pumps: [{id,name,displacement,ratedLift,rotorDiameter,maxSpeed,
+           eccentricity,frictionTorque,slipAtRated}]
+  drives: [{id,name,maxTorque,maxPower,maxSpeed,maxAxialLoad,efficiency}]
+  rodGrades: [{id,name,yield,tensile}]
+  rodSizes: [{id,name,diameter,couplingOd,massPerLength}]
+Lists may be omitted; at least one supported entry is required. IDs must be
+unique per type and cannot override built-ins or existing project records.
+Displacement is m3/s at 100 rpm; ratedLift is m of fresh water; dimensions m;
+torque N*m, power W, axial load N, strengths Pa, mass/length kg/m, efficiency a
+0..1 fraction. maxSpeed is rpm. Imported pumps use the legacy rated-slip model;
+optional bench curves/performance modes and other unrecognized fields are NOT
+imported. Use the Pump editor to configure supported performance modes afterward.
+The Show catalog format button provides an explicitly illustrative template,
+not manufacturer data. Max pasted JSON size is 5 MiB, max 5000 entries per type.
+Imported rod grades/sizes feed the same resolver as presets in the UI and engine.
+
+Parity & Runtime is another new tab. It exposes verified coverage, unresolved
+models and original runtime prerequisites without marking them implemented. It is
+not a live connection to the original engine; the web analysis stays independent.
+
+Windows readiness runner:
+  scripts/run-windows-readiness.ps1 -ApplicationDirectory <authorized-installed-app>
+By default results go under .local-analysis/windows-readiness. A custom output
+directory must also be inside .local-analysis. Requires Windows, .NET 8 SDK and
+Windows Desktop Runtime. It builds the probe with ProbeWindows=true, uses an
+actual net8.0-windows/UseWPF runtime target, checks required files, applies an
+execution timeout, and exits nonzero when any required loader probe is blocked.
+It neither installs/activates PC-PUMP nor patches its code/license checks. It
+copies equipment.db before probing, reports original errors, and tests sample
+loading plus WPF availability. It does NOT execute a complete well simulation.
+Both default net8.0 and net8.0-windows probe builds were verified with zero
+warnings/errors in this Linux sandbox; Windows execution/PowerShell runtime
+behavior remains untested here. Existing six numeric helper checks still pass.
+
+Not delivered as complete: manufacturer database rows, complete original well
+simulation, the unresolved calculation families, or full desktop/UI parity.
+Those remain dependent on original Windows initialization and independent
+reference outputs; the new screens make the status explicit rather than hiding
+missing engineering capabilities behind generic options.
+
+Wine 11 original-loader execution (latest evidence)
+-------------------------------------------------
+The prior Windows/WPF dependency blocker has now been partly overcome: workspace-
+local Wine 11 runs official Windows .NET 8.0.32 + WindowsDesktop 8.0.32 bundles.
+Microsoft runtime archives were SHA-512 checked against official release metadata;
+WineHQ packages were SHA-256 checked against the WineHQ jammy Packages listing.
+No global installation or vendor binary modification was made. Ubuntu Wine 6
+was first tested but aborted at unimplemented GetProcessGroupAffinity; Wine 11
+successfully loads PresentationFramework and enumerates desktop resources.
+
+Reproducible invocation (requires the installed local bundles and Windows probe):
+  bash scripts/run-wine-readiness.sh
+The command clears stale reports, uses a separate Wine prefix, applies a timeout,
+and exits nonzero for blocked original loaders. It is NOT a simulation bridge.
+Current detailed report: .local-analysis/wine11-loader-results/runtime-paths.json
+  desktop: success (WPF assembly availability only, not an interactive desktop)
+  desktopResources: success
+  catalog: blocked, q5 -> q3 -> q1.a throws NullReferenceException
+  sampleProject: blocked, k7.a -> Enumerable.Max on empty warning collection
+Adding the actual System.Threading.AccessControl 10.0.0 dependency resolved the
+intermediate logging assembly failure. Stack retrieval now safely preserves the
+original error even when dependency resolution prevents diagnostic formatting.
+
+The catalog's q1.a accesses ace.b() application/security state; the harness has
+not initialized that normal application context. This is NOT proof of a licence
+denial, password failure or corrupted database. No secrets were extracted, no
+security branch was patched, and no fake context/return value was injected.
+The sample parse failure requires further original initialization/format tracing;
+warning checks were NOT disabled and no successful project parse is claimed.
+The dashboard now reflects these deeper failures instead of the superseded
+missing-WPF errors. Complete database extraction, full original simulation,
+remaining models and desktop behavioral/visual parity are STILL NOT complete.
+
+Local bundle sources used (not committed):
+  https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/main/binary-amd64/Packages.gz
+  https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine/wine-stable-amd64_11.0.0.0~jammy-1_amd64.deb
+  https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine/wine-stable_11.0.0.0~jammy-1_amd64.deb
+  https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json
+Extract WineHQ packages locally under .local-analysis/wine11/root and both win-x64
+runtime zip bundles into .local-analysis/dotnet-windows. The loader's libunwind8
+is extracted under .local-analysis/wine/root; all tool homes/prefixes stay local.
+These are observed compatible components, not an automated general installer.
+
+Parser initialization fix and successful original sample runs (latest)
+--------------------------------------------------------------------
+The earlier parser failure was caused by an incomplete harness, not proven bad
+vendor files: auc is an analysis-PROFILE collection, not a generic warnings list.
+The desktop's normal a5.a path seeds it from an at9 registry. The probe now uses
+original constructors/helpers: new af3(), new at9(), uz.a(registry, units, false),
+rs.a(profiles, registry), then la.a(path, profiles). No dummy profiles, altered
+parser checks or patched return values are supplied. The false flag selects the
+original registry's non-optional profile variants; it is not a security bypass.
+
+With that fix, all 11 bundled ss*.pcp files load under Wine 11/Windows .NET 8.
+They expose 29 analysis cases and 29 embedded EquipmentDefinitionModel objects;
+each has 27 profiles. Counts/provenance are recorded in
+  tests/fixtures/original-project-parsing.json
+Detailed local output: .local-analysis/wine11-loader-results/sample-projects.json.
+These are parsing successes, NOT 29 successful simulations or manufacturer
+catalog extraction. Equipment-definition counts are not pump/drive model counts.
+The probe fails sample readiness if any sample fails or none are found.
+
+The next simulation dependency is now reflected from the actual original method:
+  r9.a(bool, akm, aua, q8, akk, af3, int)
+  aua has constructor (anu, aos); q8 is an IDisposable catalog-adapter interface.
+The report's simulationRequirements section lists actual parameter assemblies,
+constructors and interface flags. Its success status means signature inspection
+succeeded; executed=false explicitly means no full simulation was run.
+The normal application startup constructs security configuration and performs key
+protection discovery before catalog use. The probe has not reproduced that full
+startup; q1.a still encounters uninitialized ace.b() application/security state.
+That null reference is not proof that activation was rejected. No activation,
+security context or catalog adapter was faked. Full simulation, manufacturer rows,
+web binary-project import and UI behavioral parity remain unresolved.
+
+Normal desktop startup and deployment reconstruction (latest)
+-------------------------------------------------------------
+Further investigation confirms q6 is an EF/SQLite-backed q8 implementation, NOT
+an in-memory sample catalog. Its internal EquipmentModel constructor does not
+remove the need for a genuine initialized database. No fake q8 was supplied.
+
+A new staging command restores shortened cabinet identifiers using each original
+managed assembly's own identity, including culture directories for satellites:
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    --prepare-application "$PWD/.local-analysis/app-files" \
+    "$PWD/.local-analysis/staged-app-new"
+Destination must be empty. Vendor code is unchanged and source files untouched.
+Duplicate identities with differing bytes are quarantined in unresolved-variants,
+not guessed or treated as interchangeable. staging-map.json records source/name
+mapping; staging-readiness.json audits runtime assets against pcpump.deps.json.
+The captured pass staged 309 files, quarantined 15 ambiguous identities and found
+18 unresolved runtime assets. RID-specific runtimeTargets are NOT yet resolved;
+this is deployment reconstruction tooling, not a completed installation.
+
+The official ASP.NET Core 8.0.32 win-x64 runtime was also installed locally and
+SHA-512 verified against Microsoft's release metadata (the application requires
+Core, WindowsDesktop AND ASP.NET Core). Launching the original staged PcPump.dll
+entrypoint under Wine 11 now reaches original f.a -> f.b -> WPF XAML loading.
+It fails when WPF creates a resource-listener window: no display driver/server
+is available. A workspace-local Xvfb attempt failed because its packaged keyboard
+compiler expects /usr/bin/xkbcomp. No system directory was modified to work around
+that sandbox restriction. No real desktop window or successful security/catalog
+startup was observed. The virtual-display failure does not prove an application
+or license defect, and remaining manifest gaps may appear after it is resolved.
+
+Latest status: original sample parsing works for all bundled projects; catalog
+initialization and complete simulation still do not. The underlying normal startup
+must run with valid installation assets, working display/native dependencies and
+legitimate application/license configuration. No security keys, checks or catalog
+adapter results were forged or bypassed. Both probe targets still compile cleanly;
+all 51 JavaScript and 7 Python tests pass. Vendor binaries/resources remain local.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.

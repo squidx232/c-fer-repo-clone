@@ -13,9 +13,9 @@
  *    combined von Mises stress (axial + bending + torsion), stretch and torsional wind-up.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./catalog.js'), require('./fluid.js'));
-  else root.PCPEngine = factory(root.PCPCatalog, root.PCPFluid);
-})(typeof self !== 'undefined' ? self : this, function (Catalog, Fluid) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./catalog.js'), require('./fluid.js'), require('./equipment-library.js'));
+  else root.PCPEngine = factory(root.PCPCatalog, root.PCPFluid, root.PCPEquipment);
+})(typeof self !== 'undefined' ? self : this, function (Catalog, Fluid, Equipment) {
   'use strict';
 
   var G = 9.80665;
@@ -278,8 +278,8 @@
     var errors = [];
     for (var i = 0; i < secs.length; i++) {
       var s = secs[i];
-      var size = s.size === 'custom' ? { id: 'custom', name: s.sizeName || 'Custom size', diameter: s.diameter, couplingOd: s.couplingOd, massPerLength: s.massPerLength } : Catalog.byId(Catalog.ROD_SIZES, s.size);
-      var grade = s.grade === 'custom' ? { id: 'custom', name: s.gradeName || 'Custom grade', yield: s.yieldStrength, tensile: s.tensileStrength } : Catalog.byId(Catalog.ROD_GRADES, s.grade);
+      var size = s.size === 'custom' ? { id: 'custom', name: s.sizeName || 'Custom size', diameter: s.diameter, couplingOd: s.couplingOd, massPerLength: s.massPerLength } : Catalog.byId(Equipment.list(project, 'rodSizes'), s.size);
+      var grade = s.grade === 'custom' ? { id: 'custom', name: s.gradeName || 'Custom grade', yield: s.yieldStrength, tensile: s.tensileStrength } : Catalog.byId(Equipment.list(project, 'rodGrades'), s.grade);
       if (!size || !grade) { errors.push('Rod section ' + (i + 1) + ': unknown size or grade.'); continue; }
       var numeric = function (v) { return typeof v === 'number' && isFinite(v) && v > 0; };
       if (!numeric(size.diameter) || !numeric(grade.yield) ||

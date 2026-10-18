@@ -1,0 +1,30 @@
+{
+  "provenance": {
+    "application": "PC-PUMP 5.2.1.18703",
+    "runtime": "Windows .NET 8.0.32 under Wine 11, Ubuntu 22.04 x64",
+    "scope": "original sample parser with original registry initialization; no full simulation",
+    "initialization": "new af3(); new at9(); uz.a(registry, preferences, false); rs.a(profiles, registry); la.a(path, profiles)",
+    "correction": "auc is an analysis-profile collection, not a generic warnings accumulator; initial empty-list probe was incomplete",
+    "limitations": "counts only; no manufacturer rows or vendor assets redistributed; no sample inputs mapped to web project yet"
+  },
+  "samples": [
+    {"file": "ss_1.pcp", "analyses": 2, "profiles": 27, "embeddedEquipment": 2},
+    {"file": "ss_10.pcp", "analyses": 1, "profiles": 27, "embeddedEquipment": 1},
+    {"file": "ss_2.pcp", "analyses": 2, "profiles": 27, "embeddedEquipment": 2},
+    {"file": "ss_3.pcp", "analyses": 9, "profiles": 27, "embeddedEquipment": 9},
+    {"file": "ss_4.pcp", "analyses": 2, "profiles": 27, "embeddedEquipment": 2},
+    {"file": "ss_5.pcp", "analyses": 3, "profiles": 27, "embeddedEquipment": 3},
+    {"file": "ss_6a.pcp", "analyses": 2, "profiles": 27, "embeddedEquipment": 2},
+    {"file": "ss_6b.pcp", "analyses": 1, "profiles": 27, "embeddedEquipment": 1},
+    {"file": "ss_7.pcp", "analyses": 2, "profiles": 27, "embeddedEquipment": 2},
+    {"file": "ss_8.pcp", "analyses": 4, "profiles": 27, "embeddedEquipment": 4},
+    {"file": "ss_9.pcp", "analyses": 1, "profiles": 27, "embeddedEquipment": 1}
+  ],
+  "simulationRequirements": {
+    "entry": "r9.a(bool, akm, aua, q8, akk, af3, int)",
+    "callbackConstructor": "aua(anu, aos)",
+    "equipmentAdapter": "q8 is an IDisposable interface from PcPump.Data",
+    "executed": false,
+    "remaining": "normal catalog/application/security initialization and real adapter/configuration contexts"
+  }
+}
