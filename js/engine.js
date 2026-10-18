@@ -5,7 +5,8 @@
  *  - Wellbore trajectory: minimum curvature method.
  *  - Fluid: dead-oil / water mixture (no free gas), Newtonian viscosity.
  *  - Tubing/rod annulus hydraulics: concentric annulus, laminar (exact) or turbulent (Blasius).
- *  - Pump: Q = q·N − slip, slip ∝ ΔP/ΔP_rated · (μ_ref/μ)^0.5.
+ *  - Pump: Q = q·N − slip. Legacy rated-slip, reference-speed linear/quadratic
+ *    efficiency curves, or constant efficiency; configurable viscosity power law.
  *  - Pump torque: hydraulic (q·ΔP/2π) + elastomer friction.
  *  - Rod string: soft-string model integrated from pump to surface giving axial load,
  *    rod/tubing contact (side) load, mechanical friction torque, viscous (Couette) torque,
@@ -174,15 +175,61 @@
 
   function ratedPressure(pump) { return pump.ratedLift * RHO_WATER * G; }
 
+  /** Validate optional performance inputs; absent inputs retain legacy behavior. */
+  function validatePerformance(pump) {
+    var errors = [], model = pump.performanceModel || 'legacy';
+    if (['legacy', 'linear', 'quadratic', 'constant'].indexOf(model) < 0) errors.push('Unknown pump performance model.');
+    ['referenceViscosity', 'viscosityExponent'].forEach(function (key) {
+      var v = pump[key];
+      if (v !== undefined && (typeof v !== 'number' || !isFinite(v) || (key === 'referenceViscosity' ? v <= 0 : v < 0 || v > 1))) {
+        errors.push('Invalid pump ' + key + '.');
+      }
+    });
+    if (model === 'constant') {
+      if (typeof pump.efficiencyAtRated !== 'number' || !isFinite(pump.efficiencyAtRated) || pump.efficiencyAtRated < 0 || pump.efficiencyAtRated > 1) {
+        errors.push('Pump constant efficiency must be between 0 and 100%.');
+      }
+    }
+    if (model === 'linear' || model === 'quadratic') {
+      ['efficiencyAtZero', 'efficiencyAtRated'].forEach(function (key) {
+        var v = pump[key];
+        if (typeof v !== 'number' || !isFinite(v) || v < 0 || v > 1) errors.push('Pump ' + key + ' must be between 0 and 100%.');
+      });
+      if (pump.efficiencyAtRated > pump.efficiencyAtZero) errors.push('Rated-pressure efficiency must not exceed zero-pressure efficiency.');
+      if (!(pump.referenceSpeed > 0) || !isFinite(pump.referenceSpeed)) errors.push('Pump reference speed must be positive.');
+    }
+    return errors;
+  }
+
+  /**
+   * Reference-speed efficiency curve mapped to speed-independent slippage.
+   * Linear: eta = eta0 + (etaRated - eta0) * (dP / ratedPressure).
+   * Quadratic: replace the pressure ratio by its square.
+   * Slip at another viscosity = reference slip * (muRef / mu)^exponent.
+   * Constant-efficiency mode is intentionally independent of viscosity and speed.
+   */
   function slipRate(pump, dP, mu) {
-    var pr = ratedPressure(pump);
-    if (pr <= 0 || dP <= 0) return 0;
-    return pump.slipAtRated * (dP / pr) * Math.sqrt(MU_REF / Math.max(mu, MU_REF * 0.1));
+    var pr = ratedPressure(pump), model = pump.performanceModel || 'legacy';
+    if (pr <= 0) return 0;
+    var pressureRatio = Math.max(0, dP) / pr;
+    var slip;
+    if (model === 'linear' || model === 'quadratic') {
+      var ratio = model === 'quadratic' ? pressureRatio * pressureRatio : pressureRatio;
+      var eta = pump.efficiencyAtZero + (pump.efficiencyAtRated - pump.efficiencyAtZero) * ratio;
+      slip = displacementPerRev(pump) * pump.referenceSpeed / 60 * Math.max(0, 1 - eta);
+    } else {
+      slip = pump.slipAtRated * pressureRatio;
+    }
+    var ref = pump.referenceViscosity === undefined ? MU_REF : pump.referenceViscosity;
+    var exponent = pump.viscosityExponent === undefined ? (model === 'legacy' ? 0.5 : 0.33) : pump.viscosityExponent;
+    return slip * Math.pow(ref / Math.max(mu, MU_REF * 0.1), exponent);
   }
 
   function pumpFlow(pump, speed, dP, mu) {
     var qth = displacementPerRev(pump) * speed / 60;
-    var slip = Math.min(qth, slipRate(pump, dP, mu));
+    var slip = pump.performanceModel === 'constant'
+      ? qth * (1 - pump.efficiencyAtRated)
+      : Math.min(qth, slipRate(pump, dP, mu));
     return { theoretical: qth, slip: slip, actual: Math.max(0, qth - slip) };
   }
 
@@ -300,6 +347,7 @@
     if (!(wb.pumpDepth > 0)) errors.push('Pump depth must be greater than zero.');
     if (!(wb.tubingId > 0)) errors.push('Tubing ID must be greater than zero.');
     if (!(pump && pump.displacement > 0)) errors.push('Pump displacement must be greater than zero.');
+    if (pump) errors = errors.concat(validatePerformance(pump));
     if (!(speed > 0)) errors.push('Rotational speed must be greater than zero.');
     var rs = resolveRodSections(project);
     errors = errors.concat(rs.errors);
@@ -537,6 +585,7 @@
     viscousTorquePerLength: viscousTorquePerLength,
     displacementPerRev: displacementPerRev,
     ratedPressure: ratedPressure,
+    validatePerformance: validatePerformance,
     pumpFlow: pumpFlow,
     pumpTorque: pumpTorque,
     rotorThrustArea: rotorThrustArea,

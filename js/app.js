@@ -331,11 +331,43 @@
       numField('pump.rotorDiameter', 'Rotor minor diameter', 'diameter', { min: 0.005, onchange: markCustom }),
       numField('pump.eccentricity', 'Eccentricity', 'diameter', { min: 0, onchange: markCustom }),
       numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }),
-      numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Scaled linearly with ΔP and by (1 cP/μ)^0.5.' }),
+      numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Used by the legacy model only; corrected using the reference viscosity and exponent below.' }),
       numField('pump.maxSpeed', 'Max recommended speed', 'speed', { min: 1, onchange: markCustom }),
       readField('Displacement per revolution', (sys() === 'metric' ? U.fmtNumber(E.displacementPerRev(pm) * 1e6, 1) + ' cm³/rev' : U.fmtNumber(E.displacementPerRev(pm) / 1.6387064e-5, 2) + ' in³/rev')),
       readField('Rated differential pressure', f(E.ratedPressure(pm), 'pressure'))
     ])]));
+
+    var model = pm.performanceModel || 'legacy';
+    var performanceFields = [selectField('Performance model', [
+      { value: 'legacy', label: 'Legacy rated-slip model (existing projects)' },
+      { value: 'linear', label: 'Linear pressure-dependent efficiency' },
+      { value: 'quadratic', label: 'Quadratic pressure-dependent efficiency' },
+      { value: 'constant', label: 'Constant volumetric efficiency' }
+    ], model, function (v) {
+      pm.performanceModel = v;
+      if (pm.referenceSpeed === undefined) pm.referenceSpeed = 100;
+      if (pm.referenceViscosity === undefined) pm.referenceViscosity = 0.001;
+      if (pm.viscosityExponent === undefined) pm.viscosityExponent = v === 'legacy' ? 0.5 : 0.33;
+      if (pm.efficiencyAtZero === undefined) pm.efficiencyAtZero = 1;
+      if (pm.efficiencyAtRated === undefined) pm.efficiencyAtRated = 0.4;
+      renderPump(); recompute();
+    })];
+    if (model === 'linear' || model === 'quadratic') {
+      performanceFields.push(
+        numField('pump.referenceSpeed', 'Efficiency reference speed', 'speed', { min: 1 }),
+        numField('pump.efficiencyAtZero', 'Efficiency at zero differential pressure', 'percent', { min: 0, max: 1 }),
+        numField('pump.efficiencyAtRated', 'Efficiency at rated differential pressure', 'percent', { min: 0, max: 1 })
+      );
+    } else if (model === 'constant') {
+      performanceFields.push(numField('pump.efficiencyAtRated', 'Constant volumetric efficiency', 'percent', { min: 0, max: 1 }));
+    }
+    if (model !== 'constant') {
+      performanceFields.push(
+        numField('pump.referenceViscosity', 'Slip reference viscosity', 'viscosity', { min: 0.0001, value: function () { return pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity; } }),
+        numField('pump.viscosityExponent', 'Slip viscosity exponent', 'none', { min: 0, max: 1, value: function () { return pm.viscosityExponent === undefined ? (model === 'legacy' ? 0.5 : 0.33) : pm.viscosityExponent; }, hint: '0 disables viscosity correction; documented PC-PUMP default is 0.33. Calibrate against measured data.' })
+      );
+    }
+    p.appendChild(card('Volumetric performance', [grid(performanceFields), el('p', { class: 'hint', text: 'Linear/quadratic models convert reference-speed efficiency to speed-independent slip, then apply (reference viscosity / fluid viscosity)^exponent. Existing files retain the original 0.5 exponent. These equations have been traced; full PC-PUMP system parity has not been validated.' })]));
 
     var res = el('span', { class: 'hint' });
     p.appendChild(card('Operating speed', [grid([
@@ -699,6 +731,10 @@
     html.push(tbl('Pump & drive', [
       row('Pump', (pm.name || pm.modelId) + (pm.modelId === 'custom' ? ' (custom)' : '')),
       row('Displacement / rated lift', f(pm.displacement, 'displacement') + ' / ' + f(pm.ratedLift, 'head')),
+      row('Performance model', pm.performanceModel || 'legacy'),
+      row('Efficiency reference speed', pm.referenceSpeed === undefined ? 'not specified' : pm.referenceSpeed + ' rpm'),
+      row('Efficiency at zero / rated pressure', pm.efficiencyAtRated === undefined ? 'not specified' : ((pm.efficiencyAtZero === undefined ? '—' : (pm.efficiencyAtZero * 100).toFixed(1) + '%') + ' / ' + (pm.efficiencyAtRated * 100).toFixed(1) + '%')),
+      row('Slip reference viscosity / exponent', f(pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity, 'viscosity') + ' / ' + (pm.viscosityExponent === undefined ? ((!pm.performanceModel || pm.performanceModel === 'legacy') ? 0.5 : 0.33) : pm.viscosityExponent)),
       row('Speed', pr.speed + ' rpm'),
       row('Drive', (dr.name || dr.modelId) + ' — ' + f(dr.maxTorque, 'torque') + ', ' + f(dr.maxPower, 'power'))
     ]));

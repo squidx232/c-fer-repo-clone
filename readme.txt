@@ -7,7 +7,10 @@ Run
   npm start            -> serves the app at http://localhost:8080 (python3 http.server)
   or simply open index.html in a browser.
 Test
-  npm test             -> engine unit tests (node --test)
+  npm ci               -> install locked development-only test dependencies
+  npm test             -> 25 calculation and DOM integration tests (node --test)
+  python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
+                       -> 5 installer-extraction safety tests
 
 Workflow (left-hand tabs)
   Project          case details, node spacing, rod-load & side-load design limits
@@ -26,12 +29,50 @@ Workflow (left-hand tabs)
 Toolbar: New, Open/Save project (.json), Export CSV, printable Report, Metric/Imperial
 units, dark mode. The current project is auto-saved in browser localStorage.
 
+Verified performance integration (equation-level scope, not full PC-PUMP parity)
+--------------------------------------------------------------------------
+The Pump tab now supports four volumetric models:
+  legacy:    original rated-slip calculation; absent new fields retain exponent 0.5
+  linear:    etaRef = eta0 + (etaRated - eta0) * (deltaP / ratedPressure)
+  quadratic: etaRef = eta0 + (etaRated - eta0) * (deltaP / ratedPressure)^2
+  constant:  actualRate = theoreticalRate * efficiencyAtRated
+For the linear/quadratic models:
+  referenceSlip = displacementPerRev * referenceSpeed / 60 * (1 - etaRef)
+  targetSlip = referenceSlip * (referenceViscosity / fluidViscosity)^exponent
+  actualRate = max(0, theoreticalRate - targetSlip)
+Viscosity correction defaults to 0.33 when selecting a new variable-efficiency
+model. Exponent 0 disables viscosity correction. Existing projects retain their
+original calculation; selecting a model does not rewrite explicit settings.
+New settings use SI internally and persist in JSON/localStorage. They feed the
+operating point, speed solve/sweep, pump curves, and printable report. Efficiency
+inputs must be 0..100%, nonincreasing with pressure. Constant mode ignores the
+curve reference speed and viscosity correction. Out-of-rating calculations remain
+screening extrapolations and retain the existing rated-pressure warnings.
+
+Evidence is recorded in tests/fixtures/performance-evidence.json. The installed
+manual's variable efficiency and viscosity topics were cross-checked against
+PcPump.Engine 5.2.1.18703: class tu maps efficiency polynomial coefficients to
+slip and applies viscosity power corrections; domain au8 initializes 0.33. Only
+original equations, inputs, test vectors and provenance are committed, not vendor
+source or assets. The test vectors are independent analytical values, NOT outputs
+from executing the vendor engine. DOM tests stub chart rendering; they verify
+wiring, units, storage, report generation, and navigation, not visual accuracy.
+
+Still not complete: multiphase/PVT and gas separation, thermal/elastomer models,
+bench-test interpolation, full rod mechanics/fatigue/wear, vendor catalog/project
+import, and full-system warning/output parity. The equipment.db file is NOT a
+readable SQLite database; its format has not been established. No vendor
+engine execution or reference-output benchmark has been performed, so equivalent
+engineering accuracy must not be claimed. Next milestones are per-model tracing,
+unit/boundary verification, and reference well cases with agreed tolerances.
+
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
   - Fluid: dead oil + water mixture density; Newtonian viscosity; no free gas.
   - Tubing/rod annulus friction: concentric annulus, exact laminar solution or
     Blasius turbulent; coupled with the pump flow by bisection.
-  - Pump: Q = q*N - slip; slip proportional to dP/dP_rated and (1 cP/mu)^0.5.
+  - Pump: Q = q*N - slip; legacy or linear/quadratic reference curves with a
+    configurable viscosity exponent, or constant efficiency (details above).
     Torque = q*dP/(2*pi) + elastomer friction torque. Rotor thrust = dP * stator cavity area.
   - Rod string: soft-string model integrated pump -> surface: buoyed weight, rod/tubing
     contact (side) loads, contact-friction torque, viscous (Couette) torque, von Mises
