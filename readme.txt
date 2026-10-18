@@ -3,6 +3,46 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Latest original-runtime investigation (2026-10-18)
+  Fixed the staging ambiguity: scripts/stage-msi-application.py uses msiinfo
+  exports of the actual File, Component and Directory tables, not assembly
+  identity or cabinet filename guessing. All 309 files were restored with
+  expected lengths and verified SHA-256 copies, including RID/native paths and
+  Database/equipment.db. Registry entries and activation are NOT installed.
+
+  Reproduce staging (requires local msitools/libmsi/libgsf):
+    LD_LIBRARY_PATH="$PWD/.local-analysis/msitools/usr/lib/x86_64-linux-gnu" \
+      python3 scripts/stage-msi-application.py \
+      --msiinfo .local-analysis/msitools/usr/bin/msiinfo \
+      --msi .local-analysis/installer-files/PC-PUMP.msi \
+      --app-files .local-analysis/app-files --output .local-analysis/msi-layout
+  Destination must be empty. Original vendor files remain local and ignored.
+
+  WPF now runs on the local virtual display and enters the original security
+  initialization (f.a -> ace.a -> ac7 -> adj -> ac3). The application's own
+  log records CryptographicException in BCryptAlgorithmHandle.OpenAlgorithmHandle,
+  reached through EphemeralDataProtectionProvider and SP800_108 key derivation.
+  An isolated --crypto-readiness probe confirms Wine 11 opens AES and SHA512,
+  but SP800_108_CTR_HMAC returns 0xC0000002 (STATUS_NOT_IMPLEMENTED).
+  This is a runtime cryptography failure, NOT proof of an invalid license.
+  No cryptographic provider, activation state, security singleton, or vendor
+  code was replaced or bypassed. No guide codes or secret keys are published.
+
+  scripts/local-xkb-path.c relocates only Xvfb's open-source XkbBinDirectory
+  to the workspace keyboard compiler; it does not modify vendor software.
+  scripts/run-local-desktop.sh runs on an existing authorized DISPLAY and
+  enforces a timeout. It reports logs, not simulation success. Example:
+    DISPLAY=:89 DESKTOP_TIMEOUT=60 bash scripts/run-local-desktop.sh
+  Crypto diagnostic after building the Windows probe:
+    EngineProbe.dll --crypto-readiness (run via Windows dotnet.exe under Wine)
+
+  Still unresolved: manufacturer rows have not been read and no complete
+  original simulation has run. Parsed sample analyses are input data only.
+  Execution requires a Windows cryptographic runtime supporting this algorithm,
+  followed by the application's normal authorized security initialization;
+  further blockers may become visible after that. The web engine/UI are not
+  100% vendor parity. This section supersedes older startup-blocker descriptions.
+
 Run
   npm start            -> serves the app at http://localhost:8080 (python3 http.server)
   or simply open index.html in a browser.
