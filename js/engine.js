@@ -278,9 +278,15 @@
     var errors = [];
     for (var i = 0; i < secs.length; i++) {
       var s = secs[i];
-      var size = Catalog.byId(Catalog.ROD_SIZES, s.size);
-      var grade = Catalog.byId(Catalog.ROD_GRADES, s.grade);
+      var size = s.size === 'custom' ? { id: 'custom', name: s.sizeName || 'Custom size', diameter: s.diameter, couplingOd: s.couplingOd, massPerLength: s.massPerLength } : Catalog.byId(Catalog.ROD_SIZES, s.size);
+      var grade = s.grade === 'custom' ? { id: 'custom', name: s.gradeName || 'Custom grade', yield: s.yieldStrength, tensile: s.tensileStrength } : Catalog.byId(Catalog.ROD_GRADES, s.grade);
       if (!size || !grade) { errors.push('Rod section ' + (i + 1) + ': unknown size or grade.'); continue; }
+      var numeric = function (v) { return typeof v === 'number' && isFinite(v) && v > 0; };
+      if (!numeric(size.diameter) || !numeric(grade.yield) ||
+          (s.size === 'custom' && (!numeric(size.massPerLength) || (rods.couplingSpacing > 0 && (!numeric(size.couplingOd) || size.couplingOd < size.diameter)))) ||
+          (s.grade === 'custom' && (!numeric(grade.tensile) || grade.tensile < grade.yield))) {
+        errors.push('Rod section ' + (i + 1) + ': invalid geometry, mass or material strengths.'); continue;
+      }
       var len = i === secs.length - 1 ? depth - top : Math.max(0, +s.length || 0);
       if (top + len > depth) len = depth - top;
       if (len <= 0) {

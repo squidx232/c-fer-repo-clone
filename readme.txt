@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 42 calculation, reference-harness and DOM tests (node --test)
+  npm test             -> 47 calculation, original-output, equipment and DOM tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -151,6 +151,49 @@ Full 100% replication has NOT been established: acceptance requires complete
 scope inventory, branch/unit/sentinel mapping, independent licensed reference
 runs across model combinations and edge cases, agreed output tolerances, and
 browser end-to-end/visual checks. See the coverage ledger for remaining gaps.
+
+Original engine execution and equipment scope (latest update)
+-----------------------------------------------------------
+The earlier statements that NO vendor engine was executed describe previous
+increments and are now superseded for SIX numeric helper calls only. The original
+PcPump.Engine assembly ran successfully under local .NET 8.0.32 on Linux:
+  sy.e: dead-oil viscosity at (60 C,30 API), (80 C,20 API), (100 C,40 API)
+  sy.i: live-oil viscosity with 100 cP dead oil and Rs 0,100,300 standard m3/m3
+Outputs are committed as small numeric fixtures with provenance in
+  tests/fixtures/original-engine-viscosity.json
+The web implementations match after converting original cP outputs to Pa*s.
+This is NOT full well-case, licensing, warning-branch, desktop or catalog parity.
+The warning accumulator is null only for known in-range calls. The probe neither
+patches assemblies nor stubs dependencies nor bypasses license checks. Loading
+assemblies executes code: run only trusted authorized targets in the sandbox.
+To reproduce (artifacts remain under ignored .local-analysis):
+  bash scripts/analysis-tools.sh dotnet build scripts/engine-probe/EngineProbe.csproj \
+    -o "$PWD/.local-analysis/engine-probe" \
+    -p:BaseIntermediateOutputPath="$PWD/.local-analysis/engine-probe-obj/"
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    "$PWD/.local-analysis/app-files"
+The desktop app also requires WindowsDesktop.App; the isolated harness does not
+launch that app. No claim is made that the complete simulation works on Linux.
+
+Equipment options are NOT a fully extracted PC-PUMP catalog. Defaults remain
+10 generic pumps, 5 generic drives, 5 starter grades and 6 starter rod sizes.
+The recovered equipment.db is not plain readable SQLite. Data-layer tracing
+shows SQLite-backed EquipmentModel loading, but its container/opening requirements
+remain unresolved. No fabricated manufacturer records have been added.
+
+The UI now supports:
+  - Named custom pumps and drives saved to a project-local reusable library;
+    entries appear in their model selectors and persist in JSON/localStorage.
+  - Custom rod section size/name, body and coupling diameters, mass/length;
+    custom material name, yield and tensile strengths, with SI validation.
+  - Selecting custom properties seeds from the current preset. Selecting a
+    standard size again removes custom geometry overrides. Continuous rod still
+    uses calculated steel mass and body diameter for contact (existing model).
+Custom properties feed rod loads, stress limits and reports. Tensile strength
+is stored/validated but no new fatigue calculation is implied. Elastomer text is
+metadata only. Named pump/drive libraries do not import vendor catalogs or bench
+curves. Invalid rod dimensions/strengths fail analysis. No equipment entry is
+certified merely by being saved to the user library.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
