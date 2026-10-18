@@ -86,12 +86,45 @@ program was analyzed and its hydraulic-torque function successfully decompiled.
 The web app's 13 unit tests still pass. Missing optional providers (Hopper, IDA,
 JADX) are informational and are not needed for this native Ghidra workflow.
 
-Remaining target-specific blocker: pcpumpv521.exe contains an ISSetupStream
-payload. 7-Zip exposes it as [0], but neither 7-Zip nor Unshield opens that stream
-as an archive/cabinet. An ISSetupStream-capable extractor or the installed app's
-EXE/DLL files is still needed; the engine equations have NOT been recovered.
-No Windows installer was executed and no calculation changes were made.
-Downloads and local diagnostic results remain in the ignored .local-analysis/.
+Installer extraction is now working without running Windows code:
+  1. Use 7-Zip to extract the installer's [0] overlay.
+  2. python3 scripts/extract-is-stream.py OVERLAY OUTPUT_DIRECTORY
+  3. Use 7-Zip to extract Data1.cab from PC-PUMP.msi, then extract that cabinet.
+The Python stream extractor adapts the MIT-licensed lifenjoiner/ISx format and
+byte transform, with attribution/license retained in the source. It requires
+only Python's standard library, validates entry bounds and paths, refuses
+existing output files, and caps total decompressed output (default 2 GiB).
+Supported: ISSetupStream versions 0..4 with plain or flag-4 block encoding;
+flag-2-only full-file transforms are explicitly unsupported. Synthetic tests:
+  python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
+
+Actual extraction recovered 12 installer components and 309 application files.
+The engine target is app-files/pcpump.engine.dll (assembly PcPump.Engine,
+version 5.2.1.18703), a managed AnyCPU CIL assembly. REA successfully inspected
+its metadata and members. Many type/method names are obfuscated.
+The DLL SHA-256 is:
+  c9b6f7a73c86fdeff1c8cfc3a12098a74c1e4bed0d882f5408b7610ce84fc9df
+
+Additional workspace-local tools installed for managed analysis:
+  .NET SDK 8.0.426 and ILSpy CLI 9.1.0.7988.
+Recreate using the official dotnet-install.sh from https://dot.net/v1/dotnet-install.sh
+with --channel 8.0 --install-dir .local-analysis/dotnet --no-path, then:
+  DOTNET_ROOT="$PWD/.local-analysis/dotnet" DOTNET_CLI_HOME="$PWD/.local-analysis/home" \
+    .local-analysis/dotnet/dotnet tool install ilspycmd --version 9.1.0.7988 \
+    --tool-path "$PWD/.local-analysis/ilspy"
+Use the launcher:
+  bash scripts/analysis-tools.sh dotnet --info
+  bash scripts/analysis-tools.sh ilspy -l c .local-analysis/app-files/pcpump.engine.dll
+  bash scripts/analysis-tools.sh ilspy -t TYPE_NAME .local-analysis/app-files/pcpump.engine.dll
+ILSpy successfully decompiled CustomExpressionFunctionContext from the real
+engine; this verifies tooling, not correctness or identification of equations.
+
+No Windows installer or vendor engine was executed. No licence checks were
+modified or bypassed. No calculation changes were made. Recovered proprietary
+files and decompiler output remain local/git-ignored; only tooling is committed.
+The remaining engineering work is to map calculation methods despite obfuscated
+names, document equations and units, then validate against reference cases before
+changing the web engine. Downloads and diagnostics remain in .local-analysis/.
 
 Downloaded archive SHA-256 values (recorded, not independent vendor signatures):
   Ghidra: ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db

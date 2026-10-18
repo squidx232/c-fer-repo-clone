@@ -13,6 +13,13 @@ export XDG_DATA_HOME="$TOOLS/home/data"
 mkdir -p "$HOME" "$TMPDIR" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
 if [ "$#" -eq 0 ]; then set -- doctor --provider ghidra; fi
 case "$1" in
+  dotnet|ilspy)
+    tool="$1"; shift
+    export DOTNET_ROOT="$TOOLS/dotnet"
+    export DOTNET_CLI_HOME="$TOOLS/home"
+    if [ "$tool" = dotnet ]; then exec "$DOTNET_ROOT/dotnet" "$@"; fi
+    exec "$TOOLS/ilspy/ilspycmd" "$@"
+    ;;
   7z|7zz) shift; exec "$TOOLS/7zip/7zz" "$@" ;;
   unshield)
     shift
