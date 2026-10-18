@@ -44,10 +44,58 @@ internal static class RuntimePaths
                 .Single(m => m.Name == "a" && m.GetParameters().Length == 2 && m.GetParameters()[0].ParameterType == typeof(string));
             var warningsType = method.GetParameters()[1].ParameterType;
             var warningList = Activator.CreateInstance(warningsType);
+            // Match the desktop's a5.a path: populate profiles using original helpers.
+            // auc is an analysis-profile collection, not a generic warnings list.
+            var engine = Load("pcpump.engine.dll");
+            var domains = Load("pcpump.domains.dll");
+            var units = Load("cfer.units.dll");
+            var preferences = Activator.CreateInstance(units.GetType("af3", true)!);
+            var registry = Activator.CreateInstance(domains.GetType("at9", true)!);
+            var initialize = engine.GetType("uz", true)!.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(m => m.Name == "a" && m.GetParameters().Length == 3 &&
+                    m.GetParameters()[0].ParameterType.Name == "at9" && m.GetParameters()[2].ParameterType == typeof(bool));
+            initialize.Invoke(null, new object?[] {registry, preferences, false});
+            var seed = engine.GetType("rs", true)!.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(m => m.Name == "a" && m.GetParameters().Length == 2 &&
+                    m.GetParameters()[0].ParameterType.Name == "auc" && m.ReturnType == typeof(void));
+            seed.Invoke(null, new object?[] {warningList, registry});
             var instance = Activator.CreateInstance(reader);
-            var project = method.Invoke(instance, new object?[] {Path.Combine(directory, "ss_1.pcp"), warningList});
-            return new {loaded = project != null, projectType = project?.GetType().FullName,
-                methods = project?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(m => m.ToString()).ToArray()};
+            var samples = new List<object>();
+            var failures = 0;
+            foreach (var sample in Directory.EnumerateFiles(directory, "ss*.pcp").OrderBy(p => p)) {
+                var captured = Attempt(() => {
+                    // The original seeder clears and repopulates the collection for each project.
+                    seed.Invoke(null, new object?[] {warningList, registry});
+                    var project = method.Invoke(instance, new object?[] {sample, warningList})
+                        ?? throw new InvalidOperationException("Original parser returned null");
+                    object? Getter(string name) => project.GetType().GetMethod(name, Type.EmptyTypes)!.Invoke(project, null);
+                    var equipment = Getter("f") as System.Collections.IEnumerable;
+                    var equipmentTypes = new List<string>();
+                    if (equipment != null) foreach (var item in equipment) equipmentTypes.Add(item.GetType().FullName!);
+                    var analyses = Getter("h") as System.Collections.ICollection;
+                    var profiles = Getter("g") as System.Collections.ICollection;
+                    return new {loaded = true, projectType = project.GetType().FullName,
+                        analysisCount = analyses?.Count, profileCount = profiles?.Count,
+                        embeddedEquipmentCount = equipmentTypes.Count, embeddedEquipmentTypes = equipmentTypes};
+                });
+                if ((string?)captured.GetType().GetProperty("status")!.GetValue(captured) != "success") failures++;
+                samples.Add(new {file = Path.GetFileName(sample), result = captured});
+            }
+            File.WriteAllText(Path.Combine(output, "sample-projects.json"), JsonSerializer.Serialize(samples, new JsonSerializerOptions {WriteIndented = true}));
+            if (samples.Count == 0 || failures > 0) throw new InvalidOperationException($"Sample parsing incomplete: {failures} failed of {samples.Count}. See sample-projects.json.");
+            return new {scope = "sample parsing and collection counts only; not simulation or complete manufacturer catalog", sampleCount = samples.Count, samples};
+        });
+        report["simulationRequirements"] = Attempt(() => {
+            var engine = Load("pcpump.engine.dll");
+            var entry = engine.GetType("r9", true)!.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(m => m.Name == "a" && m.GetParameters().Length == 7 && m.GetParameters()[0].ParameterType == typeof(bool));
+            return new {executed = false, entry = entry.ToString(),
+                parameters = entry.GetParameters().Select(p => new {
+                    name = p.Name, type = p.ParameterType.FullName, assembly = p.ParameterType.Assembly.GetName().Name,
+                    isInterface = p.ParameterType.IsInterface, isAbstract = p.ParameterType.IsAbstract,
+                    constructors = p.ParameterType.GetConstructors().Select(c => c.ToString()).ToArray()
+                }).ToArray(),
+                reason = "Catalog and normal application/security contexts are not initialized; no fake contexts supplied."};
         });
         report["desktopResources"] = Attempt(() => {
             var app = Load("pcpump.dll");

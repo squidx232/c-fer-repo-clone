@@ -342,6 +342,38 @@ runtime zip bundles into .local-analysis/dotnet-windows. The loader's libunwind8
 is extracted under .local-analysis/wine/root; all tool homes/prefixes stay local.
 These are observed compatible components, not an automated general installer.
 
+Parser initialization fix and successful original sample runs (latest)
+--------------------------------------------------------------------
+The earlier parser failure was caused by an incomplete harness, not proven bad
+vendor files: auc is an analysis-PROFILE collection, not a generic warnings list.
+The desktop's normal a5.a path seeds it from an at9 registry. The probe now uses
+original constructors/helpers: new af3(), new at9(), uz.a(registry, units, false),
+rs.a(profiles, registry), then la.a(path, profiles). No dummy profiles, altered
+parser checks or patched return values are supplied. The false flag selects the
+original registry's non-optional profile variants; it is not a security bypass.
+
+With that fix, all 11 bundled ss*.pcp files load under Wine 11/Windows .NET 8.
+They expose 29 analysis cases and 29 embedded EquipmentDefinitionModel objects;
+each has 27 profiles. Counts/provenance are recorded in
+  tests/fixtures/original-project-parsing.json
+Detailed local output: .local-analysis/wine11-loader-results/sample-projects.json.
+These are parsing successes, NOT 29 successful simulations or manufacturer
+catalog extraction. Equipment-definition counts are not pump/drive model counts.
+The probe fails sample readiness if any sample fails or none are found.
+
+The next simulation dependency is now reflected from the actual original method:
+  r9.a(bool, akm, aua, q8, akk, af3, int)
+  aua has constructor (anu, aos); q8 is an IDisposable catalog-adapter interface.
+The report's simulationRequirements section lists actual parameter assemblies,
+constructors and interface flags. Its success status means signature inspection
+succeeded; executed=false explicitly means no full simulation was run.
+The normal application startup constructs security configuration and performs key
+protection discovery before catalog use. The probe has not reproduced that full
+startup; q1.a still encounters uninitialized ace.b() application/security state.
+That null reference is not proof that activation was rejected. No activation,
+security context or catalog adapter was faked. Full simulation, manufacturer rows,
+web binary-project import and UI behavioral parity remain unresolved.
+
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
   - Fluid: dead oil + water mixture density; Newtonian viscosity; no free gas.
