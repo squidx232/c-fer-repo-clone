@@ -374,6 +374,43 @@ That null reference is not proof that activation was rejected. No activation,
 security context or catalog adapter was faked. Full simulation, manufacturer rows,
 web binary-project import and UI behavioral parity remain unresolved.
 
+Normal desktop startup and deployment reconstruction (latest)
+-------------------------------------------------------------
+Further investigation confirms q6 is an EF/SQLite-backed q8 implementation, NOT
+an in-memory sample catalog. Its internal EquipmentModel constructor does not
+remove the need for a genuine initialized database. No fake q8 was supplied.
+
+A new staging command restores shortened cabinet identifiers using each original
+managed assembly's own identity, including culture directories for satellites:
+  bash scripts/analysis-tools.sh dotnet .local-analysis/engine-probe/EngineProbe.dll \
+    --prepare-application "$PWD/.local-analysis/app-files" \
+    "$PWD/.local-analysis/staged-app-new"
+Destination must be empty. Vendor code is unchanged and source files untouched.
+Duplicate identities with differing bytes are quarantined in unresolved-variants,
+not guessed or treated as interchangeable. staging-map.json records source/name
+mapping; staging-readiness.json audits runtime assets against pcpump.deps.json.
+The captured pass staged 309 files, quarantined 15 ambiguous identities and found
+18 unresolved runtime assets. RID-specific runtimeTargets are NOT yet resolved;
+this is deployment reconstruction tooling, not a completed installation.
+
+The official ASP.NET Core 8.0.32 win-x64 runtime was also installed locally and
+SHA-512 verified against Microsoft's release metadata (the application requires
+Core, WindowsDesktop AND ASP.NET Core). Launching the original staged PcPump.dll
+entrypoint under Wine 11 now reaches original f.a -> f.b -> WPF XAML loading.
+It fails when WPF creates a resource-listener window: no display driver/server
+is available. A workspace-local Xvfb attempt failed because its packaged keyboard
+compiler expects /usr/bin/xkbcomp. No system directory was modified to work around
+that sandbox restriction. No real desktop window or successful security/catalog
+startup was observed. The virtual-display failure does not prove an application
+or license defect, and remaining manifest gaps may appear after it is resolved.
+
+Latest status: original sample parsing works for all bundled projects; catalog
+initialization and complete simulation still do not. The underlying normal startup
+must run with valid installation assets, working display/native dependencies and
+legitimate application/license configuration. No security keys, checks or catalog
+adapter results were forged or bypassed. Both probe targets still compile cleanly;
+all 51 JavaScript and 7 Python tests pass. Vendor binaries/resources remain local.
+
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
   - Fluid: dead oil + water mixture density; Newtonian viscosity; no free gas.
