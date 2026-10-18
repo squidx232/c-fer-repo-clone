@@ -1,0 +1,18 @@
+{
+  "scope": "coverage ledger, not a percentage or certification of replica completeness",
+  "reference_application": "PC-PUMP 5.2.1.18703",
+  "assembly_sha256": "c9b6f7a73c86fdeff1c8cfc3a12098a74c1e4bed0d882f5408b7610ce84fc9df",
+  "syntactic_inventory": {"top_level_classes": 199, "method_headers": 1683, "decompiler_warning_comments": 4039, "tool": "scripts/map-engine-obfuscation.py", "caveat": "heuristic counts; nested/overloaded methods and compiler artifacts prevent interpretation as semantic coverage"},
+  "families": [
+    {"area": "variable efficiency and viscosity normalization", "source": "tu.a(akz, PumpModel), domain au8", "status": "selected equations traced and implemented", "validation": "analytic vectors; vendor output parity not executed"},
+    {"area": "dead/live oil viscosity", "source": "sy.e and sy.i; conversion helpers sb", "status": "selected equations traced; dead-oil option integrated", "validation": "analytic vectors; live-oil helper not integrated into PVT"},
+    {"area": "pump friction estimate", "source": "manual: Pump Friction Torque", "status": "manual-guided rated-hydraulic fraction implemented", "validation": "analytic, boundary and UI tests; not a recovered thermal/swell model", "guidance": [{"capacityM3PerDayPerRpm": "<0.4", "fractionRange": [0.2, 0.5]}, {"capacityM3PerDayPerRpm": "0.4..0.8 inclusive", "fractionRange": [0.15, 0.25]}, {"capacityM3PerDayPerRpm": ">0.8", "fractionRange": [0.05, 0.2]}]},
+    {"area": "pump bench-test interpretation and normalization", "source": "tb (15 inventoried method headers), tc (2), s6 (12); PumpTest call sites", "status": "candidate families located; unresolved domain units and branches", "validation": "not implemented or parity-tested"},
+    {"area": "advanced viscosity and temperature", "source": "tp and rx interpolation helper", "status": "linear interpolation and log mixing expressions located; domain mappings incomplete", "validation": "depth-temperature, emulsion and non-Newtonian parity unresolved"},
+    {"area": "rod loads, fatigue, wear and trajectory", "source": "multiple unresolved obfuscated families", "status": "existing original simplified models only", "validation": "unit tests do not establish vendor parity"},
+    {"area": "multiphase/PVT and gas separation", "source": "sy contains additional candidate correlations; parameter mapping incomplete", "status": "not integrated", "validation": "reference runs required"},
+    {"area": "equipment database and project formats", "source": "data/binary/xml assemblies extracted locally", "status": "format mapping incomplete", "validation": "no vendor catalog or binary project import"}
+  ],
+  "reference_cases": {"independent_vendor_cases_bundled": 0, "runner": "node scripts/check-reference-cases.js CASE.json", "template": "node scripts/check-reference-cases.js --template", "required": "authorized captured inputs, outputs in SI, application version, tolerances and capture description"},
+  "acceptance_for_full_parity": ["all in-scope screens, states, options and file formats inventoried", "units, branches, sentinels and bounds resolved for every calculation path", "licensed reference case matrix covers model combinations and boundary/error behavior", "numerical outputs and warnings pass agreed tolerances", "browser-based end-to-end and visual/accessibility checks completed"]
+}

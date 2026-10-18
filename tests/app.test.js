@@ -83,6 +83,32 @@ test('fluid correlation controls preserve Kelvin through unit changes and save/l
   } finally { dom.window.close(); }
 });
 
+test('friction estimator preserves initial torque and survives units, save/load and reports', () => {
+  const {dom, w, errors} = boot();
+  try {
+    w.PCPApp.activate('pump');
+    const original = w.PCPApp.state.result.pump.frictionTorque;
+    change(w, 'Pump friction model', 'ratedFraction');
+    assert.ok(Math.abs(w.PCPApp.state.result.pump.frictionTorque - original) < 1e-8);
+    change(w, 'Friction fraction of rated hydraulic torque', 30);
+    const value = w.PCPApp.state.result.pump.frictionTorque;
+    const units = w.document.querySelector('#unitSystem');
+    units.value = 'imperial'; units.dispatchEvent(new w.Event('change'));
+    assert.equal(w.PCPApp.state.result.pump.frictionTorque, value);
+    w.PCPApp.loadProject(JSON.parse(w.localStorage.getItem('pcp-designer-project-v1')));
+    assert.equal(w.PCPApp.state.project.pump.frictionFraction, 0.3);
+    let report = '';
+    w.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,';
+    w.open = () => ({document: {write: html => {report = html;}, close: () => {}}});
+    w.document.querySelector('#btnReport').click();
+    assert.match(report, /ratedFraction/);
+    assert.match(report, /30.0%/);
+    change(w, 'Pump friction model', 'specified');
+    assert.equal(w.PCPApp.state.result.pump.frictionTorque, original);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
 test('legacy projects retain results and new settings survive report generation', () => {
   const {dom, w, errors} = boot();
   try {

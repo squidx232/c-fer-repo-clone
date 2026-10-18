@@ -200,6 +200,15 @@
       if (pump.efficiencyAtRated > pump.efficiencyAtZero) errors.push('Rated-pressure efficiency must not exceed zero-pressure efficiency.');
       if (!(pump.referenceSpeed > 0) || !isFinite(pump.referenceSpeed)) errors.push('Pump reference speed must be positive.');
     }
+    var frictionModel = pump.frictionModel || 'specified';
+    if (['specified', 'ratedFraction'].indexOf(frictionModel) < 0) errors.push('Unknown pump friction model.');
+    var frictionValue = frictionModel === 'ratedFraction' ? pump.frictionFraction : pump.frictionTorque;
+    if (frictionValue !== undefined && (typeof frictionValue !== 'number' || !isFinite(frictionValue) || frictionValue < 0)) {
+      errors.push('Pump friction torque/fraction must be finite and nonnegative.');
+    }
+    if (frictionModel === 'ratedFraction' && (frictionValue === undefined || !(pump.ratedLift > 0) || !isFinite(pump.ratedLift))) {
+      errors.push('Rated-fraction friction requires a nonnegative fraction and positive rated lift.');
+    }
     return errors;
   }
 
@@ -241,9 +250,21 @@
     return Math.PI * d * d / 4 + 4 * e * d;
   }
 
+  /** Manual-guided friction estimate, not a temperature/swell prediction. */
+  function frictionGuidance(pump) {
+    var capacity = pump.displacement * 86400 / 100; // m³/d/rpm, independent of display units
+    if (capacity < 0.4) return { category: 'small', minFraction: 0.2, maxFraction: 0.5 };
+    if (capacity <= 0.8) return { category: 'medium', minFraction: 0.15, maxFraction: 0.25 };
+    return { category: 'large', minFraction: 0.05, maxFraction: 0.2 };
+  }
+
   function pumpTorque(pump, dP) {
-    var hyd = displacementPerRev(pump) * Math.max(0, dP) / (2 * Math.PI);
-    return { hydraulic: hyd, friction: pump.frictionTorque || 0, total: hyd + (pump.frictionTorque || 0) };
+    var q = displacementPerRev(pump);
+    var hyd = q * Math.max(0, dP) / (2 * Math.PI);
+    var friction = pump.frictionModel === 'ratedFraction'
+      ? pump.frictionFraction * q * ratedPressure(pump) / (2 * Math.PI)
+      : (pump.frictionTorque || 0);
+    return { hydraulic: hyd, friction: friction, total: hyd + friction };
   }
 
   // ---------------------------------------------------------------- rod string
@@ -463,6 +484,13 @@
     // --- checks ---
     var lim = project.limits || { rodLoadWarn: 0.8, sideLoadWarn: 900 };
     var pr = ratedPressure(pump);
+    if (pump.frictionModel === 'ratedFraction') {
+      var guide = frictionGuidance(pump);
+      warnings.push('Pump friction is estimated from rated hydraulic torque; temperature, elastomer swell and lubrication are not modeled.');
+      if (pump.frictionFraction < guide.minFraction || pump.frictionFraction > guide.maxFraction) {
+        warnings.push('Pump friction estimate is outside the manual guidance for ' + guide.category + ' pumps (' + (guide.minFraction * 100) + '–' + (guide.maxFraction * 100) + '%).');
+      }
+    }
     if (dP > pr) warnings.push('Pump differential pressure (' + (dP / 1e3).toFixed(0) + ' kPa) exceeds rated lift pressure (' + (pr / 1e3).toFixed(0) + ' kPa).');
     else if (dP > 0.85 * pr) warnings.push('Pump differential pressure is above 85% of rated lift.');
     if (volEff < 0.5) warnings.push('Low volumetric efficiency (' + (volEff * 100).toFixed(0) + '%). Consider a higher-lift pump or lower differential pressure.');
@@ -593,6 +621,7 @@
     validatePerformance: validatePerformance,
     pumpFlow: pumpFlow,
     pumpTorque: pumpTorque,
+    frictionGuidance: frictionGuidance,
     rotorThrustArea: rotorThrustArea,
     resolveRodSections: resolveRodSections,
     analyze: analyze,

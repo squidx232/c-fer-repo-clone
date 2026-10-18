@@ -337,12 +337,30 @@
       numField('pump.ratedLift', 'Rated lift (water)', 'head', { min: 1, onchange: markCustom }),
       numField('pump.rotorDiameter', 'Rotor minor diameter', 'diameter', { min: 0.005, onchange: markCustom }),
       numField('pump.eccentricity', 'Eccentricity', 'diameter', { min: 0, onchange: markCustom }),
-      numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }),
+      (pm.frictionModel || 'specified') === 'specified' ? numField('pump.frictionTorque', 'Pump friction torque', 'torque', { min: 0, onchange: markCustom, hint: 'Rotor/stator interference torque.' }) : null,
       numField('pump.slipAtRated', 'Slip at rated lift (1 cP)', 'flow', { min: 0, onchange: markCustom, hint: 'Used by the legacy model only; corrected using the reference viscosity and exponent below.' }),
       numField('pump.maxSpeed', 'Max recommended speed', 'speed', { min: 1, onchange: markCustom }),
       readField('Displacement per revolution', (sys() === 'metric' ? U.fmtNumber(E.displacementPerRev(pm) * 1e6, 1) + ' cm³/rev' : U.fmtNumber(E.displacementPerRev(pm) / 1.6387064e-5, 2) + ' in³/rev')),
       readField('Rated differential pressure', f(E.ratedPressure(pm), 'pressure'))
     ])]));
+
+    var guidance = E.frictionGuidance(pm);
+    var frictionFields = [selectField('Pump friction model', [
+      { value: 'specified', label: 'Specified friction torque (existing model)' },
+      { value: 'ratedFraction', label: 'Fraction of rated hydraulic torque (estimate)' }
+    ], pm.frictionModel || 'specified', function (v) {
+      pm.frictionModel = v;
+      if (v === 'ratedFraction' && pm.frictionFraction === undefined) {
+        var ratedTorque = E.displacementPerRev(pm) * E.ratedPressure(pm) / (2 * Math.PI);
+        pm.frictionFraction = ratedTorque > 0 ? (pm.frictionTorque || 0) / ratedTorque : 0;
+      }
+      renderPump(); recompute();
+    })];
+    if (pm.frictionModel === 'ratedFraction') {
+      frictionFields.push(numField('pump.frictionFraction', 'Friction fraction of rated hydraulic torque', 'percent', { min: 0, onchange: function () { renderPump(); } }),
+        readField('Estimated pump friction torque', f(E.pumpTorque(pm, 0).friction, 'torque')));
+    }
+    p.appendChild(card('Pump friction estimate', [grid(frictionFields), el('p', { class: 'hint', text: 'Manual guidance for ' + guidance.category + ' pumps: ' + (guidance.minFraction * 100) + '–' + (guidance.maxFraction * 100) + '% of hydraulic torque at rated pressure. Guidance assumes standard fit/geometries and medium NBR; it is not a swell or temperature model. Switching to estimate mode initially preserves the specified torque.' })]));
 
     var model = pm.performanceModel || 'legacy';
     var performanceFields = [selectField('Performance model', [
@@ -741,6 +759,9 @@
       row('Pump', (pm.name || pm.modelId) + (pm.modelId === 'custom' ? ' (custom)' : '')),
       row('Displacement / rated lift', f(pm.displacement, 'displacement') + ' / ' + f(pm.ratedLift, 'head')),
       row('Performance model', pm.performanceModel || 'legacy'),
+      row('Pump friction model', pm.frictionModel || 'specified'),
+      row('Pump friction torque', f(E.pumpTorque(pm, 0).friction, 'torque')),
+      row('Rated hydraulic friction fraction', pm.frictionModel === 'ratedFraction' ? (pm.frictionFraction * 100).toFixed(1) + '%' : 'not used'),
       row('Efficiency reference speed', pm.referenceSpeed === undefined ? 'not specified' : pm.referenceSpeed + ' rpm'),
       row('Efficiency at zero / rated pressure', pm.efficiencyAtRated === undefined ? 'not specified' : ((pm.efficiencyAtZero === undefined ? '—' : (pm.efficiencyAtZero * 100).toFixed(1) + '%') + ' / ' + (pm.efficiencyAtRated * 100).toFixed(1) + '%')),
       row('Slip reference viscosity / exponent', f(pm.referenceViscosity === undefined ? 0.001 : pm.referenceViscosity, 'viscosity') + ' / ' + (pm.viscosityExponent === undefined ? ((!pm.performanceModel || pm.performanceModel === 'legacy') ? 0.5 : 0.33) : pm.viscosityExponent)),

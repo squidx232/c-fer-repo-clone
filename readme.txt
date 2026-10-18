@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 33 calculation and DOM integration tests (node --test)
+  npm test             -> 42 calculation, reference-harness and DOM tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -104,6 +104,53 @@ Specified mixture viscosity remains the default; old files keep prior results.
 Temperature units are affine: Kelvin internally, Celsius/Fahrenheit in the UI.
 There is NO depth temperature profile, emulsion inversion, non-Newtonian model,
 free gas handling or full multiphase-flow implementation in this increment.
+
+Obfuscated method mapping and measurable parity
+----------------------------------------------
+  python3 scripts/map-engine-obfuscation.py
+Writes a local, ignored method inventory: source SHA-256, line ranges, method
+signatures, Math calls, state-machine case counts and decompiler warnings. The
+current engine has 199 top-level classes, 1683 matched method headers and 4039
+warning comments. These are heuristic syntactic counts, NOT resolved-method or
+parity percentages. Nested classes, compiler artifacts and overloads complicate
+interpretation. No claim is made that decompiled methods are valid/recompilable.
+
+The explicit coverage ledger is tests/fixtures/parity-coverage.json. Candidate
+bench-test families tb/tc/s6 are identified, but input mappings and branches are
+unresolved; tp/rx contain interpolation/log expressions with incomplete domain
+mapping. Existing soft-string, trajectory and hydraulic tests are NOT evidence
+of vendor parity. Third-party engines and licensed Windows UI were not executed.
+
+A new reference-case checker makes numerical comparisons reproducible:
+  node scripts/check-reference-cases.js --template > REFERENCE.json
+  node scripts/check-reference-cases.js REFERENCE.json
+Supply a complete SI project, independent expected outputs, absolute/relative
+tolerances, application version and capture description. Templates deliberately
+contain null expected values and fail until measured outputs are supplied. No
+independent vendor case is bundled. The checker exits nonzero on discrepancies
+and preserves calculated design errors/warnings. It only checks supplied numeric
+outputs and cases, NOT warning, UI, file-format or full-system parity.
+
+The Pump tab also offers a manual-guided friction estimate:
+  frictionTorque = frictionFraction * displacementPerRev * ratedPressure / (2*pi)
+This is a fraction of RATED hydraulic torque, constant with operating pressure;
+it is not a fraction of operating torque. Switching from specified mode initializes
+the fraction to preserve current friction torque. Switching back restores the
+specified value. Reports include the selected model, fraction and resulting torque.
+Manual guidance (standard fit/geometries, medium NBR):
+  capacity < 0.4 m3/d/rpm: 20..50%; 0.4..0.8 inclusive: 15..25%; >0.8: 5..20%.
+Guidance is advisory; nonnegative out-of-range fractions are accepted with a
+warning. Temperature, swell and lubrication remain unmodeled. This is manual-
+guided behavior, not a newly deobfuscated thermal/fit algorithm. Old projects
+retain specified friction torque and unchanged results.
+
+Run all Python tooling tests with:
+  python3 -m unittest discover -s tests -p 'test_*.py'
+There are 6 Python tests (5 extraction + 1 synthetic obfuscation-inventory test).
+Full 100% replication has NOT been established: acceptance requires complete
+scope inventory, branch/unit/sentinel mapping, independent licensed reference
+runs across model combinations and edge cases, agreed output tolerances, and
+browser end-to-end/visual checks. See the coverage ledger for remaining gaps.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.
