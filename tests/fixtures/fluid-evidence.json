@@ -1,0 +1,24 @@
+{
+  "scope": "static extraction and independently calculated property vectors, not executed vendor parity",
+  "source": {
+    "assembly": "PcPump.Engine 5.2.1.18703",
+    "sha256": "c9b6f7a73c86fdeff1c8cfc3a12098a74c1e4bed0d882f5408b7610ce84fc9df",
+    "dead_oil": "sy.e(double temperatureC, double API, ab1 messages), around local engine-full.cs line 69173",
+    "live_oil": "sy.i(double deadOilViscosityCp, double solutionGOR, ab1 messages), around line 68130",
+    "conversions": "sb.a: Celsius * 1.8 + 32; sb.b: solutionGOR * 5.6146",
+    "manual": "Advanced Fluid Viscosity: linear BS&W-weighted oil/water viscosity option",
+    "correction_to_preliminary_notes": "live-oil function's first argument is dead-oil viscosity, NOT temperature; API factor elsewhere belongs to another PVT correlation"
+  },
+  "dead_oil_vectors": [
+    {"temperatureC": 60, "api": 30, "viscosityPaS": 0.006083740371956796},
+    {"temperatureC": 80, "api": 20, "viscosityPaS": 0.009918694103048955},
+    {"temperatureC": 100, "api": 40, "viscosityPaS": 0.0011348158045839675}
+  ],
+  "limitations": [
+    "live-oil helper is not connected to system analysis until solution GOR/PVT is independently established",
+    "optional system model uses dead oil, linear water mixing and one uniform temperature",
+    "system viscosity is floored at 0.1 cP as in the existing engine",
+    "correlation bounds generate warnings; full vendor sentinel handling is not replicated",
+    "thermal profiles, emulsion inversion and non-Newtonian adjustments remain unimplemented"
+  ]
+}

@@ -284,7 +284,9 @@
     var p = $('#tab-production'); p.innerHTML = '';
     var pr = state.project.production;
     header('Production & Fluid', 'Wellhead pressures, pump intake condition and produced fluid properties.').forEach(function (n) { if (n) p.appendChild(n); });
-    var fl = E.fluidProps(pr);
+    var fl;
+    try { fl = E.fluidProps(pr); }
+    catch (error) { fl = { oilSg: E.oilSg(pr.oilApi), density: NaN, viscosity: NaN }; }
     p.appendChild(card('Pressures', [grid([
       numField('production.tubingHeadPressure', 'Tubing head pressure', 'pressure', { min: 0 }),
       numField('production.casingHeadPressure', 'Casing head pressure', 'pressure', { min: 0 }),
@@ -298,7 +300,12 @@
       numField('production.oilApi', 'Oil gravity', 'none', { min: 5, max: 60, hint: '°API', onchange: function () { renderProduction(); } }),
       numField('production.waterCut', 'Water cut', 'percent', { min: 0, max: 1, onchange: function () { renderProduction(); } }),
       numField('production.waterSg', 'Water specific gravity', 'none', { min: 0.95, max: 1.3, onchange: function () { renderProduction(); } }),
-      numField('production.viscosity', 'Effective fluid viscosity at pump', 'viscosity', { min: 1e-4, hint: 'Newtonian viscosity of the produced emulsion/mixture.' }),
+      selectField('Viscosity model', [{ value: 'specified', label: 'Specified mixture viscosity (existing model)' }, { value: 'beggsRobinson', label: 'Beggs–Robinson oil + linear water mixing' }], pr.viscosityModel || 'specified', function (v) { pr.viscosityModel = v; renderProduction(); recompute(); }),
+      (pr.viscosityModel || 'specified') === 'specified'
+        ? numField('production.viscosity', 'Effective fluid viscosity at pump', 'viscosity', { min: 1e-4, hint: 'Newtonian viscosity of the produced emulsion/mixture.' })
+        : numField('production.fluidTemperature', 'Uniform fluid temperature', 'temperature', { min: 260, max: 600, onchange: function () { renderProduction(); } }),
+      pr.viscosityModel === 'beggsRobinson' ? numField('production.waterViscosity', 'Water viscosity at fluid temperature', 'viscosity', { min: 1e-4, onchange: function () { renderProduction(); } }) : null,
+      pr.viscosityModel === 'beggsRobinson' ? readField('Calculated effective mixture viscosity', f(fl.viscosity, 'viscosity'), 'Uniform temperature; no gas, emulsion inversion or thermal profile. Viscosity floor: 0.1 cP.') : null,
       readField('Oil specific gravity', U.fmtNumber(fl.oilSg, 4)),
       readField('Mixture density', f(fl.density, 'density')),
       readField('Mixture gradient', U.format(fl.density * E.constants.G * (sys() === 'metric' ? 1 / 1000 : 0.3048 / 6894.757293), 'none', sys(), 4, false) + (sys() === 'metric' ? ' kPa/m' : ' psi/ft'))
@@ -725,7 +732,9 @@
       row('Tubing / casing head pressure', f(pd.tubingHeadPressure, 'pressure') + ' / ' + f(pd.casingHeadPressure, 'pressure')),
       row(pd.intakeMode === 'fluidLevel' ? 'Fluid level (MD)' : 'Pump intake pressure', pd.intakeMode === 'fluidLevel' ? f(pd.fluidLevel, 'length') : f(pd.intakePressure, 'pressure')),
       row('Oil gravity / water cut', pd.oilApi + ' °API / ' + (pd.waterCut * 100).toFixed(1) + ' %'),
-      row('Viscosity', f(pd.viscosity, 'viscosity')),
+      row('Viscosity model', pd.viscosityModel || 'specified'),
+      row('Effective viscosity', r && r.ok ? f(r.fluid.viscosity, 'viscosity') : 'invalid fluid inputs'),
+      row('Fluid temperature', pd.viscosityModel === 'beggsRobinson' ? f(pd.fluidTemperature, 'temperature') : 'not used'),
       row('Target rate', f(pd.targetRate, 'flow'))
     ]));
     html.push(tbl('Pump & drive', [

@@ -8,7 +8,7 @@ Run
   or simply open index.html in a browser.
 Test
   npm ci               -> install locked development-only test dependencies
-  npm test             -> 25 calculation and DOM integration tests (node --test)
+  npm test             -> 33 calculation and DOM integration tests (node --test)
   python3 -m unittest discover -s tests -p 'test_extract_is_stream.py'
                        -> 5 installer-extraction safety tests
 
@@ -65,6 +65,45 @@ readable SQLite database; its format has not been established. No vendor
 engine execution or reference-output benchmark has been performed, so equivalent
 engineering accuracy must not be claimed. Next milestones are per-model tracing,
 unit/boundary verification, and reference well cases with agreed tolerances.
+
+Continued extraction and fluid correlations
+------------------------------------------
+The remaining pc-pump-prefixed assemblies can be statically decompiled locally:
+  python3 scripts/extract-managed-core.py
+This writes per-assembly C# and logs plus a SHA-256/status inventory under the
+ignored .local-analysis/managed-core/. A nonzero exit reports timeouts/failures;
+a successful decompilation is NOT a validation of the recovered model. Third-party
+DLLs are not included. No vendor executable or engine code is run by this tool.
+Completed this pass: all 14 recovered pcpump*.dll assemblies returned exit code 0
+with nonempty decompiler output. This includes the application, engine, domains,
+data, binary/XML serializers, validation, charting, reporting and other support
+assemblies. Sources and per-assembly hashes/logs remain local/git-ignored. Resource
+assemblies may only produce metadata; nonempty output is not proof that every
+obfuscated method was recovered correctly. Localized *.dll1/*.dll2 files and
+third-party assemblies are outside this extraction pass.
+
+js/fluid.js now implements independently written Beggs-Robinson correlations:
+  Dead oil: y = 10^(3.0324 - 0.02023*API) / temperatureF^1.163
+            viscosityCp = 10^y - 1
+  Live oil: r = solutionGOR * 5.6146 (scf/STB)
+            a = 10.715*(r+100)^(-0.515), b = 5.44*(r+150)^(-0.338)
+            viscosityCp = a * deadOilViscosityCp^b
+The public module uses Kelvin, Pa*s and standard m3/m3. Provenance and analytic
+vectors are in tests/fixtures/fluid-evidence.json. Traced temperature/API limits
+and live-oil Rs > 2070 scf/STB generate warnings. Invalid inputs are rejected.
+Live-oil viscosity is a helper only, NOT wired to system analysis: Rs/PVT and gas
+separation must be established first. In particular, its first input is dead-oil
+viscosity, not temperature; preliminary identification was independently checked.
+
+Production & Fluid now offers an OPT-IN Beggs-Robinson dead-oil + linear water
+mixing model at one uniform user-specified temperature. Water viscosity is user
+specified. Mixture viscosity = oil*(1-waterCut) + water*waterCut. The existing
+engine's 0.1 cP floor remains. This viscosity feeds pump slip, tubing friction,
+viscous rod torque, curves and reports. Model limitations are shown as warnings.
+Specified mixture viscosity remains the default; old files keep prior results.
+Temperature units are affine: Kelvin internally, Celsius/Fahrenheit in the UI.
+There is NO depth temperature profile, emulsion inversion, non-Newtonian model,
+free gas handling or full multiphase-flow implementation in this increment.
 
 Engineering models (js/engine.js, SI internally)
   - Trajectory: minimum curvature method.

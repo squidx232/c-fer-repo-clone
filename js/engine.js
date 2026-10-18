@@ -13,9 +13,9 @@
  *    combined von Mises stress (axial + bending + torsion), stretch and torsional wind-up.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./catalog.js'));
-  else root.PCPEngine = factory(root.PCPCatalog);
-})(typeof self !== 'undefined' ? self : this, function (Catalog) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./catalog.js'), require('./fluid.js'));
+  else root.PCPEngine = factory(root.PCPCatalog, root.PCPFluid);
+})(typeof self !== 'undefined' ? self : this, function (Catalog, Fluid) {
   'use strict';
 
   var G = 9.80665;
@@ -134,7 +134,9 @@
     var wc = clamp(prod.waterCut, 0, 1);
     var sgO = oilSg(prod.oilApi);
     var sgMix = wc * prod.waterSg + (1 - wc) * sgO;
-    return { oilSg: sgO, sg: sgMix, density: sgMix * RHO_WATER, viscosity: Math.max(prod.viscosity, 1e-4), waterCut: wc };
+    var viscosity = Fluid.effectiveViscosity(prod);
+    return { oilSg: sgO, sg: sgMix, density: sgMix * RHO_WATER, viscosity: Math.max(viscosity.viscosity, 1e-4), waterCut: wc,
+      oilViscosity: viscosity.oilViscosity, warnings: viscosity.warnings };
   }
 
   // ---------------------------------------------------------------- hydraulics
@@ -358,7 +360,10 @@
     var lastMd = survey[survey.length - 1].md;
     if (wb.pumpDepth > lastMd + 1e-6) warnings.push('Pump depth is below the last survey station; trajectory extrapolated at constant attitude.');
 
-    var fluid = fluidProps(prod);
+    var fluid;
+    try { fluid = fluidProps(prod); }
+    catch (error) { return { ok: false, errors: [error.message], warnings: warnings }; }
+    warnings = warnings.concat(fluid.warnings || []);
     var nodes = buildNodes(survey, wb.pumpDepth, step);
     var pumpNode = nodes[nodes.length - 1];
     var pumpTvd = pumpNode.tvd;

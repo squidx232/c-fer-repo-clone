@@ -12,7 +12,7 @@ function boot() {
   });
   const w = dom.window, errors = [], charts = [];
   w.addEventListener('error', e => errors.push(e.message));
-  for (const script of ['units', 'catalog', 'engine']) {
+  for (const script of ['units', 'catalog', 'fluid', 'engine']) {
     w.eval(fs.readFileSync(path.join(root, 'js', script + '.js'), 'utf8'));
   }
   // Rendering is tested separately in a real browser; here assert chart data wiring.
@@ -57,6 +57,28 @@ test('all tabs, model changes, units and stored project preserve performance set
     assert.equal(w.PCPApp.state.project.pump.viscosityExponent, 0);
     w.PCPApp.activate('curves'); w.PCPApp.activate('sweep');
     assert.ok(charts.length > 10);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
+test('fluid correlation controls preserve Kelvin through unit changes and save/load', () => {
+  const {dom, w, errors} = boot();
+  try {
+    w.PCPApp.activate('production');
+    change(w, 'Viscosity model', 'beggsRobinson');
+    change(w, 'Oil gravity', 30);
+    change(w, 'Uniform fluid temperature', 80);
+    assert.ok(Math.abs(w.PCPApp.state.project.production.fluidTemperature - 353.15) < 1e-10);
+    const viscosity = w.PCPApp.state.result.fluid.viscosity;
+    const unit = w.document.querySelector('#unitSystem');
+    unit.value = 'imperial'; unit.dispatchEvent(new w.Event('change'));
+    assert.ok(Math.abs(Number(w.document.querySelector('[aria-label="Uniform fluid temperature"]').value) - 176) < 1e-6);
+    assert.equal(w.PCPApp.state.result.fluid.viscosity, viscosity);
+    w.PCPApp.loadProject(JSON.parse(w.localStorage.getItem('pcp-designer-project-v1')));
+    assert.equal(w.PCPApp.state.project.production.viscosityModel, 'beggsRobinson');
+    assert.equal(w.PCPApp.state.result.fluid.viscosity, viscosity);
+    w.PCPApp.activate('curves');
+    w.PCPApp.activate('results');
     assert.deepEqual(errors, []);
   } finally { dom.window.close(); }
 });

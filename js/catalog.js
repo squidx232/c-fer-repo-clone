@@ -147,6 +147,9 @@
         oilApi: 16,
         waterCut: 0.30,
         waterSg: 1.05,
+        viscosityModel: 'specified', // 'specified' | 'beggsRobinson'
+        fluidTemperature: 333.15,     // K, uniform screening temperature
+        waterViscosity: 0.001,        // Pa·s, for optional linear mixing
         viscosity: 0.5,              // Pa·s (500 cP)
         targetRate: 60 / DAY         // m³/s
       },
