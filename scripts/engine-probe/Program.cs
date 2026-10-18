@@ -5,6 +5,10 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
 
+if (args.Length == 2 && args[0] == "--data-protection-check") {
+    DataProtectionCheck.Run(Path.GetFullPath(args[1]));
+    return;
+}
 if (args.Length == 3 && args[0] == "--catalog-only") {
     CatalogProbe.Run(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
     return;

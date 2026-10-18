@@ -3,6 +3,45 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Catalog startup breakthrough (2026-10-18)
+  The original application's cryptographic startup crash was overcome in an
+  isolated local deployment. Its REAL Key Management window now opens.
+  This is NOT successful activation, catalog access, or equipment extraction.
+  Normal application startup waits at licensing/key setup in this sandbox.
+  User authorization does not establish an installed/activated runtime license.
+
+  Compatibility change is only in MIT-licensed ASP.NET DataProtection: select
+  its existing Win7 HMAC-SHA512 SP800-108 provider instead of the unsupported
+  Wine Win8 provider. Vendor security/licensing assemblies are unchanged.
+  Provider outputs match an independent HMAC reference for 1,32,64,65,128 bytes.
+  Synthetic Protect/Unprotect roundtrip succeeds; tampered ciphertext is rejected.
+  The local transformed dependency is not an official signed assembly and must
+  NOT be distributed as one. Original deployment and shared runtime untouched.
+
+  Reproduce (all outputs and transformed dependencies stay .local-analysis):
+    bash scripts/analysis-tools.sh dotnet build scripts/crypto-compat/CryptoCompat.csproj \
+      -p:BaseIntermediateOutputPath="$PWD/.local-analysis/crypto-compat-obj/" \
+      -o "$PWD/.local-analysis/crypto-compat"
+    python3 scripts/prepare-catalog-compat.py \
+      --source '.local-analysis/msi-layout/C-FER Technologies/PC-Pump' \
+      --output .local-analysis/catalog-compat-new
+  The script refuses an existing destination, verifies every unchanged file,
+  and removes only Microsoft.AspNetCore.App from the COPY's framework list so
+  shipped app-local ASP.NET dependencies are used. Core/WindowsDesktop remain.
+  Otherwise the newer shared ASP.NET dependency overrides the local one and
+  reproduces the old crash. The system/shared framework must not be patched.
+
+  Build the Windows EngineProbe as before, then under Wine run:
+    EngineProbe.dll --data-protection-check <isolated application directory>
+  This tests the exact ASP.NET provider, roundtrip and authentication; it does
+  NOT invoke vendor license checks or establish catalog readiness.
+  Launch the isolated PcPump.dll with original dotnet-windows/dotnet.exe and an
+  authorized DISPLAY. A timeout/running Key Management window is NOT success.
+
+  No catalog passwords or licensing keys were extracted or fabricated; no vendor
+  license result was patched. Manufacturer rows remain unread. This supersedes
+  older claims that native Windows is the only possible next runtime step.
+
 Catalog cryptography compatibility experiment (2026-10-18)
   Tested Wine's per-application Windows 7 compatibility setting, restoring it
   after the experiment. .NET SP800108HmacCounterKdf selected its built-in
