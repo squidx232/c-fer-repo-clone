@@ -3,6 +3,23 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Catalog cryptography compatibility experiment (2026-10-18)
+  Tested Wine's per-application Windows 7 compatibility setting, restoring it
+  after the experiment. .NET SP800108HmacCounterKdf selected its built-in
+  managed fallback and matched an independently computed public HMAC-SHA512
+  vector. No vendor keys/data, licensing logic or cryptographic libraries were
+  replaced. This success does NOT establish catalog readiness.
+
+  Actual unchanged desktop startup still fails in the bundled ASP.NET
+  DataProtection native provider. Its Cryptography.Cng.OSVersionUtil detects
+  Windows 8+ by the presence of BCryptKeyDerivation in bcrypt.dll, not the OS
+  version. Wine exports the function but cannot open SP800_108_CTR_HMAC.
+  Therefore setting Windows compatibility version does NOT solve catalog access.
+  CryptoReadiness now reports native algorithm support, export detection and
+  the independent synthetic KDF result separately, with a failing exit status
+  when native or .NET checks fail. The original desktop error remains recorded
+  in its own log; no manufacturer rows were read in this experiment.
+
 Catalog-only investigation (2026-10-18)
   Corrected a diagnostic assumption: q5 is the CUSTOM database API; the
   manufacturer catalog uses q6(string,string), which requests a read-only
