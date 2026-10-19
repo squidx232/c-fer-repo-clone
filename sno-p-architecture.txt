@@ -1,14 +1,26 @@
 sno-p enterprise modernization blueprint
 status: proposed architecture, not deployed infrastructure. existing app remains offline html/js.
 
-1. implementation strategy
-phase | core objective | engineering strategy
-functional parity | verified baseline | inventory each control, model, validation and report;
-  record evidence/version and compare independent vendor outputs with engineering tolerances.
-  manufacturer catalog unread; full vendor simulation parity remains unverified.
-architectural upgrades | measured performance/security | move expensive calculations to a
-  bounded worker pool; immutable input hashes; cache repeat runs; tenant-isolated storage.
-  sub-millisecond targets apply only to local cache lookup, not network APIs or simulations.
+1. functional baseline & performance optimization
+
+| phase | core objective | engineering strategy |
+| --- | --- | --- |
+| clean-room parity | interoperability | map observable inputs, outputs, controls and errors; implement from behavior specifications and independent reference cases; prove parity per feature, not by assertion. |
+| enterprise upgrades | measured throughput and zero-trust isolation | bounded workers, immutable input hashes, tenant-scoped caching, authenticated APIs and reproducible benchmarks. |
+
+parity target: 100% of an agreed, versioned behavioral acceptance matrix; not a claim
+  of achieved parity. manufacturer catalog unread; full simulation parity unverified.
+performance target: sub-millisecond in-process cache lookup where measured; network
+  edge latency and numerical simulation duration must be benchmarked separately.
+
+clean-room provenance gate:
+  this repository previously used decompiled artifacts in investigation; it cannot
+  be retroactively certified as a strict clean-room implementation. isolate those
+  artifacts locally, preserve their origin, and exclude them from clean-room inputs.
+  a strict implementation track needs behavior-only specifications, independently
+  authored reference cases and reviewer sign-off on each implementation dependency.
+  do not describe existing code as unencumbered or independently derived without
+  a provenance review; architecture design is not evidence of cleared provenance.
 
 must-match: SI storage, metric/imperial display, project save/load, equipment selection,
   well survey, rods, fluids, drive, current 16 curves, warning/error semantics, portrait reports.
@@ -16,19 +28,16 @@ optional: cloud sharing, revision history, queued simulations, centralized signe
 tradeoff: these require auth, backend operations and migration; do not delay offline fixes.
 
 2. ui & route topology (proposed; current app uses tabs)
-route | components | local state | global/server state
-/projects | project list, filters, empty/error states | query/filter | accessible project summaries
-/projects/new | metadata form | draft fields | authenticated tenant and user
-/projects/:id/design/:tab | survey/fluid/pump/rods/drive editors | field validation, units, tab |
-  versioned SI project snapshot; optimistic edits with version conflict handling
-/projects/:id/catalog | catalog list, provenance, validated import | filters, staged file |
-  immutable catalog versions; import is atomic, rejects unknown units and duplicate ids
-/projects/:id/runs/:runId | summary, 16-curve dashboard, node table | axis/stride/curve selection |
-  queued/running/succeeded/failed/cancelled run and immutable outputs
-/projects/:id/reports/:reportId | portrait report, print/download | pagination | run-linked artifact
-/admin/catalog-imports | schema/errors/approval workflow | selected import | admin-only approval
-/admin/engine-connectors | supported host diagnostics | explicit endpoint | admin-only status;
-  no license material stored in browser or application database
+| route | core components | local lifecycle | global/server lifecycle |
+| --- | --- | --- | --- |
+| /projects | list, filters, empty/error states | query/filter | authorized summaries, cursor pagination |
+| /projects/new | metadata form | draft -> validated | create immutable initial revision |
+| /projects/:id/design/:tab | survey/fluid/pump/rods/drive editors | dirty -> valid -> saving | revision with optimistic conflict checks |
+| /projects/:id/catalog | equipment list, provenance, import | selected file -> preview | atomic schema-validated catalog version |
+| /projects/:id/runs/:runId | 16-curve dashboard, node table | axis/stride/selection | queued -> running -> succeeded/failed/cancelled |
+| /projects/:id/reports/:reportId | portrait report, download | pagination/print state | immutable artifact tied to run |
+| /admin/catalog-imports | validation/approval workflow | selected import | admin approval and audit event |
+| /admin/engine-connectors | supported host diagnostics | explicit endpoint | authenticated host readiness, never license secrets |
 component tree: app shell -> project workspace -> design forms/results dashboard ->
   reusable unit field, equipment selector, chart figure, result table, report section.
 loading: skeleton; empty: actionable instructions; failure: retry with correlation id;
