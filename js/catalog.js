@@ -136,7 +136,8 @@
         tubingOd: tub.od,
         tubingPreset: tub.id,
         casingPreset: '7',
-        pumpDepth: 1100           // MD, m
+        pumpDepth: 1100,          // MD, m
+        tubingRoughness: 4.5e-5   // m, commercial steel (Moody chart); used by the Haaland friction factor
       },
       production: {
         tubingHeadPressure: 700e3,   // Pa
@@ -151,7 +152,10 @@
         fluidTemperature: 333.15,     // K, uniform screening temperature
         waterViscosity: 0.001,        // Pa·s, for optional linear mixing
         viscosity: 0.5,              // Pa·s (500 cP)
-        targetRate: 60 / DAY         // m³/s
+        targetRate: 60 / DAY,        // m³/s
+        producedGOR: 0,              // Sm3/Sm3; 0 disables free-gas screening (opt-in)
+        bubblePointPressure: 0,      // Pa; 0 disables free-gas screening (opt-in)
+        gasGravity: 0.65             // dimensionless, air = 1; used only when gas screening is active
       },
       pump: Object.assign({ modelId: 'PC-30-1500' }, clone(byId(PUMPS, 'PC-30-1500'))),
       speed: 200,                    // rpm

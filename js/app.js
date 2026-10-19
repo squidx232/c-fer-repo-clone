@@ -172,7 +172,8 @@
       }),
       numField('wellbore.casingId', 'Casing ID', 'diameter', { min: 0.02, onchange: function () { wb.casingPreset = 'custom'; } }),
       numField('wellbore.pumpDepth', 'Pump intake depth (MD)', 'length', { min: 1, onchange: function () { renderWellbore(); } }),
-      readField('Pump intake depth (TVD)', f(pumpTvd, 'length'))
+      readField('Pump intake depth (TVD)', f(pumpTvd, 'length')),
+      numField('wellbore.tubingRoughness', 'Tubing absolute roughness', 'diameter', { min: 0, hint: 'Used by the Haaland (1983) turbulent friction factor; default 0.045 mm is commercial steel.' })
     ])]));
 
     // survey table
@@ -310,6 +311,16 @@
       readField('Mixture density', f(fl.density, 'density')),
       readField('Mixture gradient', U.format(fl.density * E.constants.G * (sys() === 'metric' ? 1 / 1000 : 0.3048 / 6894.757293), 'none', sys(), 4, false) + (sys() === 'metric' ? ' kPa/m' : ' psi/ft'))
     ])]));
+    var r = state.result, gasRow = (r && r.ok) ? r.pump : null;
+    p.appendChild(card('Free-gas screening (optional)', [
+      grid([
+        numField('production.producedGOR', 'Produced GOR', 'none', { min: 0, hint: 'Sm3/Sm3. Set to 0 to disable free-gas screening.' }),
+        numField('production.bubblePointPressure', 'Bubble point pressure', 'pressure', { min: 0, hint: 'Set to 0 to disable free-gas screening.' }),
+        numField('production.gasGravity', 'Gas specific gravity', 'none', { min: 0.55, max: 1.5, hint: 'Air = 1. Used only when GOR and bubble point are both set.' }),
+        readField('Estimated free gas at intake', gasRow && gasRow.freeGasActive ? (gasRow.freeGasFraction * 100).toFixed(1) + ' %' : 'disabled')
+      ]),
+      el('p', { class: 'hint', text: 'Screening-level indicator only (Standing 1947 solution-GOR ratio, Standing 1977 pseudo-critical gas properties, Papay 1968 Z-factor). Liquid-phase hydraulics and pump volumetric performance are NOT adjusted for gas yet.' })
+    ]));
     p.appendChild(card('Production target', [grid([
       numField('production.targetRate', 'Target production rate', 'flow', { min: 0, hint: 'Use "Solve speed" on the Pump tab to find the speed for this rate.' })
     ])]));
@@ -582,9 +593,12 @@
     var lim = state.project.limits;
     var bounds = r.sections.slice(0, -1).map(function (s) { return { y: disp(state.depthAxis === 'tvd' ? E.tvdAt(state.project.wellbore.survey, s.bottom) : s.bottom, 'length'), color: '#8c959f', label: 'Rod taper' }; });
     Chart.draw($('#chLoad'), {
-      title: 'Rod load (combined stress / yield)', xLabel: 'Rod load (%)', yLabel: D, invertY: true, xMin: 0,
-      series: [{ name: 'Rod load', points: N.map(function (n) { return [n.loadRatio * 100, depthOf(n)]; }), color: '#1f6feb' }],
-      refLines: [{ x: lim.rodLoadWarn * 100, label: 'Limit', color: '#bf8700' }, { x: 100, label: 'Yield', color: '#cf222e' }].concat(bounds)
+      title: 'Rod load (combined stress / yield) & rotating-bending fatigue (Goodman)', xLabel: 'Usage (%)', yLabel: D, invertY: true, xMin: 0,
+      series: [
+        { name: 'Static load / yield', points: N.map(function (n) { return [n.loadRatio * 100, depthOf(n)]; }), color: '#1f6feb' },
+        { name: 'Fatigue (Goodman)', points: N.map(function (n) { return [n.fatigueRatio * 100, depthOf(n)]; }), color: '#8250df', dashed: true }
+      ],
+      refLines: [{ x: lim.rodLoadWarn * 100, label: 'Limit', color: '#bf8700' }, { x: 100, label: 'Yield / Goodman line', color: '#cf222e' }].concat(bounds)
     });
     Chart.draw($('#chTorque'), {
       title: 'Rod torque', xLabel: 'Torque (' + uu('torque') + ')', yLabel: D, invertY: true, xMin: 0,
@@ -743,9 +757,11 @@
         el('div', { class: 'bar' }, [el('div', { class: lr > 1 ? 'err' : lr > lim.rodLoadWarn ? 'warn' : '', style: 'width:' + Math.min(100, lr * 100).toFixed(1) + '%' })])
       ]));
       s.appendChild(kpi('Max side load', f(rd.maxSideLoad, 'sideLoad') + ' @ ' + f(rd.maxSideLoadMd, 'length', 0), rd.maxSideLoad > lim.sideLoadWarn ? 'warn' : ''));
+      s.appendChild(kpi('Rotating-bending fatigue (Goodman)', (rd.maxFatigueRatio * 100).toFixed(0) + ' % @ ' + f(rd.maxFatigueMd, 'length', 0), rd.maxFatigueRatio > 1 ? 'bad' : rd.maxFatigueRatio > 0.8 ? 'warn' : ''));
       s.appendChild(kpi('Rod stretch', f(rd.stretch, 'length', 2)));
       s.appendChild(kpi('Torsional wind-up', rd.windupTurns.toFixed(1) + ' turns'));
       s.appendChild(kpi('Flow regime (tubing)', pm.flowRegime + ' (Re ' + pm.reynolds.toFixed(0) + ')'));
+      if (pm.freeGasActive) s.appendChild(kpi('Free gas at intake (screening)', (pm.freeGasFraction * 100).toFixed(1) + ' %', pm.freeGasFraction > 0.1 ? 'warn' : ''));
     }
     if (errs.length || warns.length) {
       s.appendChild(el('h4', { text: 'Messages' }));

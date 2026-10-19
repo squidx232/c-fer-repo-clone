@@ -520,6 +520,30 @@ Those remain dependent on original Windows initialization and independent
 reference outputs; the new screens make the status explicit rather than hiding
 missing engineering capabilities behind generic options.
 
+Published-source hydraulics/mechanics additions (latest increment)
+-------------------------------------------------------------
+Three engine additions, each implemented from independently published, citable sources
+(not derived from any decompiled/traced vendor code) and covered by tests/mechanics.test.js:
+  1. Rotating-bending rod fatigue (modified-Goodman diagram). PCP rod strings rotate
+     continuously, so wellbore-curvature bending stress at a fixed point on the rod surface
+     reverses every revolution, while axial tension and torque stay essentially steady. Combined
+     per Shigley's Mechanical Engineering Design (Budynas & Nisbett): Se' = 0.5*Sut (Sut<=1400 MPa,
+     else 700 MPa), Goodman: bendingStress/Se' + vonMises(axial,shear)/Sut. Reported per node as
+     fatigueRatio and rolled up as rods.maxFatigueRatio/maxFatigueMd; a warning fires above 100%.
+     Screening-level only (no Marin surface-finish/size/load correction factors).
+  2. Annulus turbulent friction factor switched from a smooth-pipe-only Blasius fit to the
+     Haaland (1983) explicit approximation of the Colebrook-White (1939) equation, adding a
+     configurable tubing absolute roughness (wellbore.tubingRoughness; default 0.045 mm,
+     commercial steel per the Moody chart). Laminar flow keeps the existing exact concentric-
+     annulus solution. No reference/parity fixtures pinned the old constant; verified unaffected.
+  3. Optional free-gas screening indicator at the pump intake, from user-supplied produced GOR
+     and bubble-point pressure (opt-in; 0 disables it, preserving prior behavior). Uses Standing
+     (1947) solution-GOR pressure ratio, Standing (1977) gas pseudo-critical properties and the
+     explicit Papay (1968) Z-factor correlation. Reports pump.freeGasFraction/solutionGor and
+     warns above ~10% free gas by volume. Liquid-phase hydraulics and pump slip are NOT yet
+     adjusted for gas (still "no free-gas handling" for the actual flow solve; this is a reporting
+     indicator only).
+
 Wine 11 original-loader execution (latest evidence)
 -------------------------------------------------
 The prior Windows/WPF dependency blocker has now been partly overcome: workspace-
