@@ -1,4 +1,4 @@
-/* PCP Designer — UI controller */
+/* Sno-P — UI controller (legacy PCP storage keys retained for compatibility) */
 (function () {
   'use strict';
 
@@ -763,24 +763,46 @@
     var theme = root.getAttribute('data-theme');
     root.removeAttribute('data-theme');
     document.body.classList.add('report-render');
-    renderWellbore(); renderResults(); renderCurves();
     var imgs = {};
-    ids.forEach(function (id) { var c = document.getElementById(id); if (c) imgs[id] = c.toDataURL('image/png'); });
-    document.body.classList.remove('report-render');
-    if (theme) root.setAttribute('data-theme', theme);
-    renderWellbore();
-    activate(state.tab);
-    return imgs;
+    try {
+      renderWellbore(); renderResults(); renderCurves(); renderSweep();
+      ids.forEach(function (id) {
+        var c = document.getElementById(id);
+        if (c) imgs[id] = c.toDataURL('image/png');
+      });
+      return imgs;
+    } finally {
+      document.body.classList.remove('report-render');
+      if (theme) root.setAttribute('data-theme', theme);
+      renderWellbore();
+      activate(state.tab);
+    }
   }
 
   function buildReport() {
     var pr = state.project, r = state.result;
-    var imgs = captureCharts(['chVs', 'chPlan', 'chLoad', 'chTorque', 'chAxial', 'chSide', 'chPress', 'chQ']);
+    var groups = [
+      { title: '03 / Well geometry', charts: [['chVs', 'Vertical section'], ['chPlan', 'Plan view'], ['chDls', 'Dogleg severity']] },
+      { title: '04 / Rod string & pressure profiles', charts: [['chLoad', 'Rod load utilization'], ['chTorque', 'Torque profile'], ['chAxial', 'Axial load'], ['chSide', 'Coupling side load'], ['chPress', 'Tubing & casing pressure'], ['chStress', 'Rod stress']] },
+      { title: '05 / Pump performance', charts: [['chQ', 'Rate vs differential pressure'], ['chT', 'Torque vs differential pressure'], ['chEff', 'Volumetric efficiency']] },
+      { title: '06 / Speed sensitivity', charts: [['swQ', 'Production rate vs speed'], ['swT', 'Polished rod torque vs speed'], ['swP', 'Motor power vs speed'], ['swL', 'Rod load & efficiency vs speed']] }
+    ];
+    var w = window.open('', '_blank');
+    if (!w) { alert('Please allow pop-ups to open the report.'); return; }
+    var imgs;
+    try {
+      imgs = captureCharts(groups.reduce(function (ids, group) { return ids.concat(group.charts.map(function (c) { return c[0]; })); }, []));
+    } catch (error) {
+      w.close();
+      alert('Could not capture report charts: ' + error.message);
+      return;
+    }
     function row(k, v) { return '<tr><th>' + escapeHtml(k) + '</th><td>' + escapeHtml(v) + '</td></tr>'; }
-    function tbl(title, rows) { return '<h3>' + title + '</h3><table>' + rows.join('') + '</table>'; }
+    function tbl(title, rows) { return '<section class="report-card"><h3>' + title + '</h3><table>' + rows.join('') + '</table></section>'; }
     var wb = pr.wellbore, pd = pr.production, pm = pr.pump, dr = pr.drive;
     var html = [];
-    html.push('<h1>' + escapeHtml(pr.meta.name || 'PCP Design') + '</h1>');
+    var logo = new URL('assets/sno-p-logo.png', document.baseURI).href;
+    html.push('<header class="report-header"><img src="' + escapeHtml(logo) + '" alt="Sno-P logo"><div><p class="eyebrow">Sno-P / Engineering design report</p><h1>' + escapeHtml(pr.meta.name || 'Pump system analysis') + '</h1><p>Progressing cavity pump · Design review</p></div></header>');
     html.push('<p class="meta">Well: ' + escapeHtml(pr.meta.well || '—') + ' &nbsp;|&nbsp; Analyst: ' + escapeHtml(pr.meta.analyst || '—') +
       ' &nbsp;|&nbsp; Generated: ' + escapeHtml(new Date().toLocaleString()) + '</p>');
     if (pr.meta.notes) html.push('<p>' + escapeHtml(pr.meta.notes) + '</p>');
@@ -788,7 +810,8 @@
       var st = r.errors.length ? 'FAILED' : r.warnings.length ? 'ACCEPTABLE WITH WARNINGS' : 'PASSED';
       html.push('<p class="status">Design check: <b>' + st + '</b></p>');
     }
-    html.push('<div class="cols"><div>');
+    html.push('<nav class="report-index" aria-label="Report contents">01 Design basis · 02 Results & checks · 03 Well geometry · 04 Load profiles · 05 Pump performance · 06 Speed sensitivity</nav>');
+    html.push('<h2>01 / Design basis</h2><div class="cols"><div>');
     html.push(tbl('Wellbore', [
       row('Pump depth (MD / TVD)', f(wb.pumpDepth, 'length') + ' / ' + (r && r.ok ? f(r.pump.depthTvd, 'length') : '—')),
       row('Tubing ID / OD', f(wb.tubingId, 'diameter') + ' / ' + f(wb.tubingOd, 'diameter')),
@@ -820,8 +843,9 @@
     html.push(tbl('Rod string', (r && r.ok ? r.sections : []).map(function (s) {
       return row('Section ' + (s.index + 1), s.size.name + ' ' + s.grade.name + ', ' + f(s.length, 'length') + ' (' + f(s.top, 'length', 0) + ' – ' + f(s.bottom, 'length', 0) + ')');
     }).concat([row('Coupling spacing', pr.rods.couplingSpacing > 0 ? f(pr.rods.couplingSpacing, 'length') : 'continuous rod'), row('Friction coefficient', String(pr.rods.frictionCoefficient))])));
-    html.push('</div><div>');
+    html.push('</div></div><h2>02 / Results & checks</h2><div class="cols"><div>');
     if (r && r.ok) {
+      html.push('<div class="report-kpis"><div><span>Production rate</span><strong>' + escapeHtml(f(r.pump.rate, 'flow')) + '</strong></div><div><span>Motor power</span><strong>' + escapeHtml(f(r.surface.motorPower, 'power')) + '</strong></div><div><span>Max rod load</span><strong>' + (r.rods.maxLoadRatio * 100).toFixed(1) + '%</strong></div></div>');
       html.push(tbl('Results', [
         row('Production rate', f(r.pump.rate, 'flow')),
         row('Volumetric efficiency', (r.pump.volumetricEfficiency * 100).toFixed(1) + ' %'),
@@ -844,19 +868,25 @@
     } else if (r) {
       html.push('<h3>Errors</h3><ul>' + r.errors.map(function (m) { return '<li class="err">' + escapeHtml(m) + '</li>'; }).join('') + '</ul>');
     }
-    html.push('</div></div><div class="charts">');
-    Object.keys(imgs).forEach(function (k) { html.push('<img src="' + imgs[k] + '" alt="' + k + '">'); });
-    html.push('</div><p class="disclaimer">Screening-level analysis from simplified models. Verify with a qualified engineer before field implementation.</p>');
+    html.push('</div></div>');
+    groups.forEach(function (group) {
+      html.push('<section class="curve-section"><h2>' + group.title + '</h2><div class="charts">');
+      group.charts.forEach(function (chart) {
+        html.push('<figure data-chart="' + chart[0] + '"><figcaption>' + chart[1] + '</figcaption>' +
+          (imgs[chart[0]] ? '<img src="' + imgs[chart[0]] + '" alt="' + chart[1] + '">' : '<p class="unavailable">Unavailable: no valid analysis data for this curve.</p>') + '</figure>');
+      });
+      html.push('</div></section>');
+    });
+    html.push('<footer class="disclaimer"><strong>Sno-P · Engineering screening report</strong><p>Screening-level analysis from simplified models. Verify with a qualified engineer before field implementation. Generic or user-imported equipment is not a verified manufacturer catalog. Complete vendor simulation parity has not been established.</p></footer>');
 
-    var css = 'body{font:12px/1.4 system-ui,sans-serif;color:#111;margin:24px}h1{margin:0 0 4px;font-size:22px}h3{margin:14px 0 4px;font-size:13px;border-bottom:2px solid #0b5cad;color:#0b5cad}' +
-      'table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:3px 6px;border-bottom:1px solid #ddd;vertical-align:top}th{width:46%;color:#444;font-weight:600}' +
-      '.meta{color:#555}.status{padding:6px 10px;background:#eef4fb;border-left:4px solid #0b5cad}.cols{display:grid;grid-template-columns:1fr 1fr;gap:24px}' +
-      '.charts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.charts img{width:100%;border:1px solid #ddd;break-inside:avoid}' +
-      'li.err{color:#cf222e}li.warn{color:#9a6700}.disclaimer{color:#777;font-size:11px;margin-top:16px}@media print{.noprint{display:none}}';
-    var w = window.open('', '_blank');
-    if (!w) { alert('Please allow pop-ups to open the report.'); return; }
-    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(pr.meta.name || 'PCP report') + '</title><style>' + css + '</style></head><body>' +
-      '<div class="noprint" style="text-align:right"><button onclick="window.print()">Print / Save as PDF</button></div>' + html.join('') + '</body></html>');
+    var css = '@page{size:A4 portrait;margin:14mm 12mm}*{box-sizing:border-box}body{font:12px/1.5 system-ui,sans-serif;color:#183247;margin:24px auto;max-width:186mm;padding:0 8px;background:#fff}' +
+      '.report-header{display:flex;align-items:center;gap:20px;border-bottom:3px solid #326c64;padding-bottom:14px}.report-header img{width:132px;height:72px;object-fit:contain}.report-header p{margin:3px 0;color:#526574}.eyebrow{text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:700}h1{margin:4px 0;font-size:25px;line-height:1.2}h2{font-size:17px;border-bottom:1px solid #bbcecf;padding-bottom:7px;margin:24px 0 12px;break-after:avoid}h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin:0;padding:9px 10px;background:#eef4f4;color:#25594f}' +
+      '.report-card{border:1px solid #dce5e8;border-radius:6px;overflow:hidden;margin-bottom:12px;break-inside:avoid}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{text-align:left;padding:5px 10px;border-bottom:1px solid #edf0f2;vertical-align:top;overflow-wrap:anywhere}th{width:46%;color:#526574;font-weight:500}tr:last-child th,tr:last-child td{border-bottom:0}' +
+      '.meta{color:#526574;font-size:11px}.status{padding:10px 12px;background:#eef4fb;border-left:4px solid #286390}.report-index{font-size:10px;color:#526574;padding:10px 0;border-block:1px solid #e3e9ec}.cols{display:block}.report-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.report-kpis div{padding:12px;background:#eef4f4;border-radius:6px}.report-kpis span{display:block;font-size:10px;color:#526574}.report-kpis strong{font-size:17px}' +
+      '.curve-section{break-before:page}.charts{display:grid;grid-template-columns:1fr;gap:14px}figure{margin:0;border:1px solid #dce5e8;border-radius:6px;padding:10px;break-inside:avoid}figcaption{font-weight:600;font-size:12px;margin-bottom:6px}.charts img{display:block;width:100%;height:auto;max-height:100mm;object-fit:contain}.unavailable{color:#697a88;font-style:italic}' +
+      'li.err{color:#b52b27}li.warn{color:#886315}.disclaimer{color:#697a88;font-size:10px;margin-top:24px;border-top:2px solid #326c64;padding-top:10px}.noprint{position:sticky;top:0;text-align:right;background:#fff;padding:10px 0}.noprint button{background:#25594f;color:white;border:0;border-radius:6px;padding:10px 16px;cursor:pointer}@media print{body{margin:0;padding:0;max-width:none}.noprint{display:none}*{print-color-adjust:exact;-webkit-print-color-adjust:exact}thead{display:table-header-group}tr{break-inside:avoid}}';
+    w.document.write('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sno-P — ' + escapeHtml(pr.meta.name || 'Design report') + '</title><style>' + css + '</style></head><body>' +
+      '<div class="noprint"><button onclick="window.print()">Print / Save portrait PDF</button></div>' + html.join('') + '</body></html>');
     w.document.close();
   }
 

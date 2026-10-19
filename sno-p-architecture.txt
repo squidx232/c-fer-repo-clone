@@ -1,0 +1,178 @@
+sno-p enterprise modernization blueprint
+status: proposed architecture, not deployed infrastructure. existing app remains offline html/js.
+
+1. implementation strategy
+phase | core objective | engineering strategy
+functional parity | verified baseline | inventory each control, model, validation and report;
+  record evidence/version and compare independent vendor outputs with engineering tolerances.
+  manufacturer catalog unread; full vendor simulation parity remains unverified.
+architectural upgrades | measured performance/security | move expensive calculations to a
+  bounded worker pool; immutable input hashes; cache repeat runs; tenant-isolated storage.
+  sub-millisecond targets apply only to local cache lookup, not network APIs or simulations.
+
+must-match: SI storage, metric/imperial display, project save/load, equipment selection,
+  well survey, rods, fluids, drive, current 16 curves, warning/error semantics, portrait reports.
+optional: cloud sharing, revision history, queued simulations, centralized signed catalogs.
+tradeoff: these require auth, backend operations and migration; do not delay offline fixes.
+
+2. ui & route topology (proposed; current app uses tabs)
+route | components | local state | global/server state
+/projects | project list, filters, empty/error states | query/filter | accessible project summaries
+/projects/new | metadata form | draft fields | authenticated tenant and user
+/projects/:id/design/:tab | survey/fluid/pump/rods/drive editors | field validation, units, tab |
+  versioned SI project snapshot; optimistic edits with version conflict handling
+/projects/:id/catalog | catalog list, provenance, validated import | filters, staged file |
+  immutable catalog versions; import is atomic, rejects unknown units and duplicate ids
+/projects/:id/runs/:runId | summary, 16-curve dashboard, node table | axis/stride/curve selection |
+  queued/running/succeeded/failed/cancelled run and immutable outputs
+/projects/:id/reports/:reportId | portrait report, print/download | pagination | run-linked artifact
+/admin/catalog-imports | schema/errors/approval workflow | selected import | admin-only approval
+/admin/engine-connectors | supported host diagnostics | explicit endpoint | admin-only status;
+  no license material stored in browser or application database
+component tree: app shell -> project workspace -> design forms/results dashboard ->
+  reusable unit field, equipment selector, chart figure, result table, report section.
+loading: skeleton; empty: actionable instructions; failure: retry with correlation id;
+invalid run: no stale curves; missing curves explicitly unavailable, never fabricated.
+
+3. database schema & data models (postgresql 16; migration draft)
+create table tenants (id uuid primary key, name text not null);
+create table memberships (
+  tenant_id uuid references tenants(id), user_id text not null,
+  role text not null check (role in ('viewer','engineer','admin')),
+  primary key(tenant_id,user_id));
+create table projects (
+  id uuid primary key, tenant_id uuid not null references tenants(id),
+  name text not null check(length(name) between 1 and 200),
+  created_at timestamptz not null default now(), archived_at timestamptz,
+  unique(tenant_id,id));
+create table project_revisions (
+  tenant_id uuid not null, project_id uuid not null, revision integer not null check(revision>0),
+  schema_version integer not null check(schema_version>0), units text not null check(units='SI'),
+  inputs jsonb not null check(jsonb_typeof(inputs)='object'), input_sha256 char(64) not null,
+  created_by text not null, created_at timestamptz not null default now(),
+  primary key(tenant_id,project_id,revision),
+  foreign key(tenant_id,project_id) references projects(tenant_id,id));
+create table catalog_versions (
+  id uuid primary key, tenant_id uuid not null references tenants(id), source text not null,
+  source_version text, source_sha256 char(64) not null, rights_reference text not null,
+  approved_by text, approved_at timestamptz, unique(tenant_id,id));
+create table equipment (
+  id uuid primary key, tenant_id uuid not null, catalog_version_id uuid not null,
+  kind text not null check(kind in ('pump','drive','rod_grade','rod_size')),
+  external_id text not null, manufacturer text not null, model text not null,
+  specs_si jsonb not null check(jsonb_typeof(specs_si)='object'),
+  foreign key(tenant_id,catalog_version_id) references catalog_versions(tenant_id,id),
+  unique(catalog_version_id,kind,external_id));
+create table simulation_runs (
+  id uuid primary key, tenant_id uuid not null, project_id uuid not null, revision integer not null,
+  engine_version text not null, catalog_hash char(64) not null,
+  status text not null check(status in ('queued','running','succeeded','failed','cancelled')),
+  idempotency_key text not null, result_object_key text, error_code text,
+  created_at timestamptz not null default now(), completed_at timestamptz,
+  foreign key(tenant_id,project_id,revision) references project_revisions(tenant_id,project_id,revision),
+  unique(tenant_id,id), unique(tenant_id,idempotency_key));
+create table reports (
+  id uuid primary key, tenant_id uuid not null, run_id uuid not null,
+  template_version text not null, sha256 char(64) not null, object_key text not null,
+  foreign key(tenant_id,run_id) references simulation_runs(tenant_id,id));
+create index project_list on projects(tenant_id,created_at desc) where archived_at is null;
+create index equipment_lookup on equipment(tenant_id,kind,manufacturer,model);
+create index queued_runs on simulation_runs(created_at) where status='queued';
+
+jsonb rationale: heterogeneous equipment specifications and immutable project snapshots,
+  validated by versioned server JSON schemas, with normalized identity/provenance/workflow.
+constraints at schema layer: finite positive dimensions, pressure/power limits, survey MD
+  strictly increasing, fractions in [0,1], valid references, Kelvin temperature >0.
+RLS on all tenant tables: tenant_id = current_setting('app.tenant_id',true)::uuid for both
+  USING and WITH CHECK; transaction-local tenant set only after authenticated membership.
+use FORCE ROW LEVEL SECURITY, non-owner app role without BYPASSRLS; admin jobs separate.
+add append-only audit events (actor/tenant/action/entity/hash/time) before production writes.
+
+4. enterprise api specification (proposed REST /api/v1)
+headers: Authorization: Bearer <OIDC access token>; Content-Type: application/json;
+  X-Request-ID optional UUID (server validates/generates); Idempotency-Key for queued writes;
+  If-Match: "revision" for project updates. tenant comes from verified membership, not payload.
+GET /projects?cursor=<opaque>&limit=50 -> 200
+  {"items":[{"id":"uuid","name":"well a","revision":3}],"nextCursor":null}
+POST /projects -> 201 Location: /api/v1/projects/:id
+  request {"name":"well a","schemaVersion":1,"units":"SI","inputs":{...validated project...}}
+  response {"id":"uuid","revision":1,"inputSha256":"hex64"}
+GET /projects/:id -> 200 ETag: "3"
+  {"id":"uuid","name":"well a","revision":3,"schemaVersion":1,"units":"SI","inputs":{...}}
+PUT /projects/:id If-Match: "3" -> 200 ETag: "4"
+  request {"name":"well a","schemaVersion":1,"units":"SI","inputs":{...}}
+  response {"id":"uuid","revision":4,"inputSha256":"hex64"}
+  412 if revision changed; never overwrite silently.
+POST /catalog-imports (admin) -> 202
+  request {"schemaVersion":1,"units":"SI","provenance":{"source":"licensed export",
+    "rightsReference":"agreement-id","sourceVersion":"2026-10"},
+    "pumps":[{"id":"supplier-id","name":"model","displacement":0.0001,
+    "ratedLift":1000,"maxSpeed":400,"frictionTorque":10,"rotorDiameter":0.05,
+    "slipAtRated":0.00001,"eccentricity":0.005}]}
+  response {"id":"uuid","status":"validating"}; no records published until atomic approval.
+GET /catalog-imports/:id -> 200
+  {"id":"uuid","status":"validated","errors":[],"recordCount":1,"published":false}
+POST /catalog-imports/:id/approve (admin) -> 201
+  request {}; response {"catalogVersionId":"uuid","recordCount":1}
+GET /equipment?kind=pump&catalogVersionId=uuid&cursor=... -> 200
+  {"items":[{"id":"uuid","kind":"pump","manufacturer":"supplier","model":"model",
+    "units":"SI","specs":{...},"catalogVersionId":"uuid"}],"nextCursor":null}
+POST /projects/:id/runs Idempotency-Key: <uuid> -> 202 Location: /api/v1/runs/:id
+  request {"revision":4,"engineVersion":"sno-p-1","catalogVersionId":"uuid"}
+  response {"id":"uuid","status":"queued","pollAfterMs":1000}
+GET /runs/:id -> 200
+  {"id":"uuid","status":"succeeded","warnings":[],"errors":[],"units":"SI",
+    "summary":{...},"curvesUrl":"/api/v1/runs/uuid/curves","nodesUrl":"/api/v1/runs/uuid/nodes"}
+GET /runs/:id/curves -> 200
+  {"runId":"uuid","units":"SI","curves":[{"id":"pump-rate","xQuantity":"pressure",
+    "yQuantity":"flow","series":[{"name":"200 rpm","points":[[0,0.001],[1000000,0.0009]]}]}]}
+GET /runs/:id/nodes?cursor=...&limit=500 -> 200
+  {"runId":"uuid","items":[{"md":0,"tvd":0,"torque":100,"axial":10000}],"nextCursor":null}
+POST /runs/:id/reports -> 202
+  request {"format":"pdf","pageSize":"A4","orientation":"portrait","templateVersion":"1"}
+  response {"id":"uuid","status":"queued"}
+GET /reports/:id -> 200
+  {"id":"uuid","status":"ready","downloadUrl":"short-lived signed URL","sha256":"hex64"}
+errors: {"error":{"code":"VALIDATION_FAILED","message":"invalid input",
+  "fields":[{"path":"inputs.speed","reason":"must be positive"}],"requestId":"uuid"}}
+common errors: 400 malformed, 401 unauthenticated, 403 forbidden, 404 absent/inaccessible,
+  409 duplicate/import conflict/not-ready, 412 stale revision, 413 oversized import,
+  422 invalid engineering data, 429 rate limited (Retry-After), 503 worker unavailable.
+cache: immutable authorized run data ETag/private; signed downloads expire; no public tenant cache.
+limits: initial 10MiB imports, 100k points/run; reject oversized data; per-user/tenant quotas
+  tuned from load tests. never log bearer tokens, activation keys or vendor secrets.
+
+5. technical stack & infrastructure architecture
+recommended: TypeScript + Next.js App Router, PostgreSQL 16 + Drizzle, Redis/Valkey queues,
+  Node worker containers reusing the tested JS engine; S3-compatible object storage;
+  Playwright/Chromium report worker; OIDC provider, OpenTelemetry, managed secrets.
+rationale: preserve current tested algorithms and unit code; one language across web/API;
+  avoid a numerical rewrite while parity is unverified. static frontend CDN, API autoscaling,
+  bounded workers, worker memory/time limits, dead-letter queue and idempotent processing.
+alternative: Go numerical workers only after profiling identifies a concrete CPU bottleneck;
+  tradeoff is duplicate-model validation and maintenance, not automatic sub-ms simulation.
+Redis cache key: tenant + input hash + engine version + catalog hash + schema version.
+DB remains source of truth; outbox commits run request and queue intent atomically.
+licensed vendor execution, if contractually supported, belongs on isolated activated Windows
+  hosts; local least-privilege agent pulls approved jobs over outbound mTLS; explicit seat
+  concurrency; no public engine endpoint, no activation keys in cloud payloads. this connector
+  is proposed, NOT currently implemented or validated with catalog export.
+security: CSP, strict schemas, tenant RLS, RBAC, CSRF for cookie sessions, signed artifact URLs,
+  encrypted storage/backups, audit trail; numerical code cannot make arbitrary network calls.
+
+6. deployment & execution milestones (estimates; evidence-gated, not parity promises)
+week 1: portrait report/branding, report regression tests, baseline field inventory (this increment).
+weeks 2-3: normal licensed host setup, authorized equipment export format/units/provenance,
+  independent vendor input/output fixtures; gate blocked until actual access exists.
+weeks 3-5: auth, tenant schemas, versioned project API, worker queue; migrate local project JSON
+  by schema version with dry-run validation; original offline files remain supported.
+weeks 5-7: parity gaps prioritized from fixtures (fluid/thermal/rods/bench normalization),
+  acceptance: tolerances signed off by engineer, all warning/limit/boundary cases covered.
+weeks 7-8: browser PDF visual tests, accessibility/keyboard tests, load/security/backup restore;
+  acceptance: stable reproducibility, no cross-tenant leakage, no stale or missing curves.
+then: staged regional deployment, CDN assets, one authoritative write region before multi-region;
+  canary and rollback by engine/template/schema version. global data residency by requirement.
+report acceptance: A4 portrait; all 16 current charts/captions; clear unavailable curves;
+  unit labels, provenance, warnings, metadata escaping; snapshot consistent with run hash.
+performance acceptance: establish measured p50/p95/p99 on representative wells first;
+  proposed p95 API reads <200ms regional, no numerical latency guarantee without benchmarking.

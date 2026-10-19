@@ -1,7 +1,49 @@
-PCP Designer - browser-based progressing cavity pump (PCP) system design & analysis
+Sno-P - browser-based progressing cavity pump (PCP) system design & analysis
 =====================================================================================
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
+
+Sno-P portrait reporting and supported catalog access (2026-10-19)
+  Renamed app/report branding to Sno-P. Supplied logo stored locally in
+  assets/sno-p-logo.png so expiring download URL is not a runtime dependency.
+  Legacy project storage keys and PCPApp automation name retained for compatibility.
+  Reports now use A4 portrait, branded masthead, numbered sections, result KPIs,
+  readable tables and all 16 CURRENT app curves (not all vendor desktop curves):
+    geometry 3; rod/stress/pressure profiles 6; pump performance 3; speed sweep 4.
+  Missing analysis curves show explicit unavailable text. Theme/tab restored even
+  if capture fails; blocked popups do not trigger offscreen rendering.
+  Browser print dialog can override page setup; report CSS requests A4 portrait.
+
+  Real Chromium validation: 16 chart images plus logo loaded, zero browser errors,
+  no horizontal overflow; default report PDF has 12 portrait A4 pages. Screenshots
+  and PDF are local ignored artifacts. Unit tests cover chart wiring, escaping,
+  failure cleanup, popup blocking; original engineering tests remain unchanged.
+  Full proposed enterprise blueprint (not implemented backend):
+    sno-p-architecture.txt -- six requested sections, route/state matrix,
+    PostgreSQL schema, REST contracts, stack choices and gated milestones.
+
+  Supported normal licensing route from vendor bundled manual:
+    Main Program/Section 5 - Troubleshooting & FAQ/License Troubleshooting.htm
+    Main Program/Section 1 - Installation/Network License Usage.htm
+  For an existing activated NETWORK SOFTLOCK: use original Key Management ->
+  Softlock Settings -> Network Softlock Connection; enter authorized server
+  name/IP and configured Network Key Server Manager port, then Connect.
+  For HASP: verify licensed key presence in Sentinel ACC on authorized Windows
+  host (localhost:1947), driver/service and seat availability. Do not disable
+  firewalls; request narrowly scoped administrator-approved connectivity rules.
+  These are documented supported workflows, NOT completed activation here.
+
+  scripts/check-catalog-host.ps1 is a READ-ONLY Windows prerequisite check:
+    .\scripts\check-catalog-host.ps1 -ApplicationDirectory '<installed app>'
+  Optional -LicenseServer '<authorized host>' -LicensePort <configured port>
+  checks only that explicitly supplied TCP endpoint (not UDP/HASP readiness).
+  Checks file presence/hashes, hasplms service and installed dotnet runtimes.
+  Does not activate, read keys, modify network settings or export records.
+  PowerShell is unavailable here: checker has NOT been executed on Windows.
+  A healthy prerequisite report does not prove licensing or catalog access.
+  Manufacturer catalog remains unread; no catalog rows or full vendor simulation
+  results were added. An activated Windows session is still needed to verify
+  actual catalog loading/export. Proposed connector is not a completed bridge.
 
 Independent catalog-path investigation (2026-10-18)
   Inspected the installed executables, bundled manual's Online Equipment

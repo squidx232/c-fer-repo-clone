@@ -59,7 +59,7 @@
     if (cfg.xMin !== undefined) xs.push(cfg.xMin);
     if (cfg.yMin !== undefined) ys.push(cfg.yMin);
 
-    var m = { l: 62, r: 14, t: cfg.title ? 30 : 12, b: 44 };
+    var m = { l: 62, r: 36, t: cfg.title ? 30 : 12, b: 44 };
     var legendH = series.length > 1 ? 18 : 0;
     m.t += legendH;
     var pw = cssW - m.l - m.r, ph = cssH - m.t - m.b;
