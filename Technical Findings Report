@@ -16,6 +16,8 @@
 | Wrapper | InstallShield (Flexera), Setup Launcher Unicode |
 | Product | PC-PUMP 5.2.1.0, C-FER Technologies |
 | Transport integrity | Matched server `Content-MD5` header |
+https://download.cfertech.com/pcpump/pcpumpv521.exe link for download 
+
 
 ## 2. Methodology & Tools
 
@@ -30,7 +32,7 @@
 | Runtime behavior tracing | Custom C# harness (`EngineProbe`, reflection-based) | Narrow, read-only invocation of original methods; no modification |
 | Cross-platform runtime | Wine 11.0.0.0 (jammy), official .NET 8.0.32 Runtime + WindowsDesktop + ASP.NET Core Runtime (win-x64) | Reproduce the application's normal Windows startup path |
 | PE export inspection | Python `pefile` | Enumerate native exports |
-
+REA Repo for decombiling https://github.com/morluto/rea (must use)
 All downloaded components (Wine `.deb` packages, .NET runtime bundles) were hash-verified against their official sources (WineHQ `Packages.gz`, Microsoft `releases.json`) before use.
 
 ## 3. Key Findings
@@ -77,3 +79,12 @@ All work was performed via static extraction (file/archive unpacking, decompilat
 - Decompiled source for all 14 managed `pcpump*.dll` assemblies.
 - `EngineProbe` harness source and JSON execution reports for each probe above.
 - REA/Ghidra analysis and decompilation JSON for `sqlite.interop.dll`.
+
+
+## 6. Next session plan
+
+Decombile and bypass FUN_180038c00 + `q1.a` + 'ace.b'  to secure the CTF, as per below hackathon:
+
+
+
+
