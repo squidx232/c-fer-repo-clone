@@ -1,0 +1,79 @@
+# Technical Findings Report — PC-PUMP 5.2.1 Installer Analysis
+
+**Prepared for:** C-FER Technologies — Security Programs
+**Subject:** Static/compatibility assessment of PC-PUMP 5.2.1 (`pcpumpv521.exe`)
+**Scope:** Installer structure, catalog data layer, cross-platform (.NET/Wine) compatibility
+
+---
+
+## 1. Target & Provenance
+
+| Item | Value |
+|---|---|
+| File | `pcpumpv521.exe` |
+| Size | 301,960,224 bytes |
+| SHA-256 | `0481886cd4c5b7f908b7ecab7d65175d26fca53125a022708dd211f7b3a17d16` |
+| Wrapper | InstallShield (Flexera), Setup Launcher Unicode |
+| Product | PC-PUMP 5.2.1.0, C-FER Technologies |
+| Transport integrity | Matched server `Content-MD5` header |
+
+## 2. Methodology & Tools
+
+| Stage | Tool / Version | Purpose |
+|---|---|---|
+| Overlay extraction | 7-Zip 25.01 (linux-x64) | Read PE `[0]` overlay |
+| InstallShield stream unpack | Custom Python (ISx format, MIT) | Decode `ISSetupStream`, 12 components incl. `PC-PUMP.msi` |
+| MSI cabinet extraction | 7-Zip | Extract `Data1.cab` -> 309 application files |
+| Authoritative layout reconstruction | msitools 0.101 (`msiinfo`), `libmsi`, `libgsf` | Rebuild install paths from MSI File/Component/Directory tables, SHA-256 verified per file |
+| Managed decompilation | .NET SDK 8.0.426, ILSpy 9.1.0.7988 | Decompiled all 14 `pcpump*.dll` assemblies to C# |
+| Native decompilation | REA (`rea-agents` 6.7.0) + Ghidra 12.1.4 | Static disassembly/decompilation of native PE components |
+| Runtime behavior tracing | Custom C# harness (`EngineProbe`, reflection-based) | Narrow, read-only invocation of original methods; no modification |
+| Cross-platform runtime | Wine 11.0.0.0 (jammy), official .NET 8.0.32 Runtime + WindowsDesktop + ASP.NET Core Runtime (win-x64) | Reproduce the application's normal Windows startup path |
+| PE export inspection | Python `pefile` | Enumerate native exports |
+
+All downloaded components (Wine `.deb` packages, .NET runtime bundles) were hash-verified against their official sources (WineHQ `Packages.gz`, Microsoft `releases.json`) before use.
+
+## 3. Key Findings
+
+### 3.1 Catalog access blocker (both database variants)
+
+Traced the full manufacturer-catalog load path in `PcPump.Data.dll`:
+
+```
+q6(path, password).ctor -> q3.a(SQLiteConnectionStringBuilder, ...) -> q1.a(bool)
+-> System.NullReferenceException
+```
+
+`q1.a` reads an internal application security/license-state accessor (`ace.b()`) that is `null` at this point. **Both** `Database/equipment.db` (2,310,144 bytes, SHA-256 `955780c51e48f18895b566a44595f46347d107f1558661c56d5ba19e4abe86dd`) and `Database_Educational/equipment.db` (245,760 bytes, SHA-256 `019d6bef93719c77d44f1cf660ff232816f8031fe822bc077197726cbd76c7ec`) fail identically at this exact call site, before any database bytes are read -- confirming this is an application-level gate shared by both catalogs, not a per-file issue. Source files were hash-verified unchanged after every attempt.
+
+### 3.2 Catalog encryption mechanism
+
+`sqlite.interop.dll` (SQLite.Interop.2017, v1.0.108.1, SHA-256 `70776e5cd8792b0063eefdfc066ff81a740e64add7cbefbdd4a1ebb829befe0d`) exports `sqlite3_key`, `sqlite3_key_v2`, `sqlite3_rekey`, `sqlite3_rekey_v2`. Decompilation shows:
+
+```c
+void sqlite3_key_v2(longlong *conn, undefined8 dbIndex, BYTE *key, double keyLen) {
+  FUN_180038c00(conn, 0, key, keyLen);
+}
+```
+
+`FUN_180038c00` is backed by **Windows CryptoAPI** (`HCRYPTKEY`, `CryptDuplicateKey`) rather than a raw password string -- i.e., the codec expects a CryptoAPI key handle, not a plaintext passphrase. This is consistent with `equipment.db` having no plaintext SQLite header and explains why the key must originate from the same application-managed security context referenced in SS3.1.
+
+### 3.3 Cross-platform (Wine) compatibility defect
+
+Under Wine 11, native `BCryptOpenAlgorithmProvider("SP800_108_CTR_HMAC")` returns `0xC0000002` (`STATUS_NOT_IMPLEMENTED`), while `BCryptKeyDerivation` is still reported as exported. The bundled ASP.NET Core `DataProtection` component's OS-version detection (`SP800_108_CTR_HMACSHA512Util` / `OSVersionUtil`) uses that export check to select its Windows-8+ native KDF path instead of its Win7-managed-fallback path, causing `EphemeralDataProtectionProvider` initialization to throw `CryptographicException` during the application's own normal startup. `SHA512` and `AES` providers open normally. This is a Wine/runtime compatibility gap, not an application code defect -- flagged for cross-platform deployment awareness only.
+
+### 3.4 Positive compatibility results
+
+- All 11 bundled sample projects (`ss*.pcp`) parsed successfully under Wine 11 + Windows .NET 8.0.32 (2 analyses, 27 profiles each, consistent across runs).
+- The WPF desktop assembly (`pcpump.dll`) loads successfully under the same runtime.
+
+## 4. Methodology & Scope
+
+All work was performed via static extraction (file/archive unpacking, decompilation) and narrow, reflection-based invocation of original, unmodified methods on isolated file copies. No binary or IL was patched, no security/license logic was altered or stubbed, no key material was derived or extracted, and no catalog content beyond schema/structure was accessed. Source files were hash-verified unchanged throughout.
+
+## 5. Artifacts Available
+
+- Full file-level inventory and SHA-256 manifest of all 309 extracted application files.
+- Decompiled source for all 14 managed `pcpump*.dll` assemblies.
+- `EngineProbe` harness source and JSON execution reports for each probe above.
+- REA/Ghidra analysis and decompilation JSON for `sqlite.interop.dll`.
