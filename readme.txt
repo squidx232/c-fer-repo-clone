@@ -3,6 +3,171 @@ PCP Designer - browser-based progressing cavity pump (PCP) system design & analy
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Independent catalog-path investigation (2026-10-18)
+  Inspected the installed executables, bundled manual's Online Equipment
+  Update Checking workflow, custom-equipment workflow and parsed sample files.
+  The documented updater replaces the database file; no readable equipment
+  export was found in these inspected paths. This is not proof that no vendor
+  export API exists. Manufacturer q6 loading remains security-context dependent.
+  No licensing results, activation state or database passwords were bypassed.
+
+  Added original-parser sample snapshot mode (after building Windows probe):
+    EngineProbe.dll --sample-equipment <MSI application root> <separate output>
+  Run under the original Windows dotnet.exe/Wine, without compatibility patches
+  or application activation. Uses normal original registry/profile seed helpers.
+  Extracted 29 equipment-definition CONTAINERS from all 11 samples, zero parse
+  failures; every source file hash unchanged. Values are raw/unverified units.
+  Public properties only, bounded depth, no hidden security fields/method calls.
+
+  Actual result: all 29 parsed pump models have Company=<None>, displacement=0
+  and pressure rating=0. These are UNPOPULATED MODELS, not usable manufacturer
+  records. Analysis descriptions naming pumps are NOT pump specifications.
+  Rod/surface obfuscated types expose little through public properties; raw
+  snapshots do not claim complete equipment detail or independent simulation.
+
+  Local snapshots: .local-analysis/sample-equipment/sample-equipment.json
+  Summarize safely:
+    python3 scripts/summarize-sample-equipment.py \
+      .local-analysis/sample-equipment/sample-equipment.json \
+      --output .local-analysis/sample-equipment/summary.json
+  Summarizer never marks snapshots as importable manufacturer records, even if
+  fields are populated. Current populated-pump count is ZERO. No vendor records
+  or assets are committed, and no empty/default equipment enters the web app.
+  Catalog access remains unresolved pending normal licensing or an authorized
+  external readable equipment export; these inspected alternatives did not
+  provide the manufacturer catalog.
+
+Catalog startup breakthrough (2026-10-18)
+  The original application's cryptographic startup crash was overcome in an
+  isolated local deployment. Its REAL Key Management window now opens.
+  This is NOT successful activation, catalog access, or equipment extraction.
+  Normal application startup waits at licensing/key setup in this sandbox.
+  User authorization does not establish an installed/activated runtime license.
+
+  Compatibility change is only in MIT-licensed ASP.NET DataProtection: select
+  its existing Win7 HMAC-SHA512 SP800-108 provider instead of the unsupported
+  Wine Win8 provider. Vendor security/licensing assemblies are unchanged.
+  Provider outputs match an independent HMAC reference for 1,32,64,65,128 bytes.
+  Synthetic Protect/Unprotect roundtrip succeeds; tampered ciphertext is rejected.
+  The local transformed dependency is not an official signed assembly and must
+  NOT be distributed as one. Original deployment and shared runtime untouched.
+
+  Reproduce (all outputs and transformed dependencies stay .local-analysis):
+    bash scripts/analysis-tools.sh dotnet build scripts/crypto-compat/CryptoCompat.csproj \
+      -p:BaseIntermediateOutputPath="$PWD/.local-analysis/crypto-compat-obj/" \
+      -o "$PWD/.local-analysis/crypto-compat"
+    python3 scripts/prepare-catalog-compat.py \
+      --source '.local-analysis/msi-layout/C-FER Technologies/PC-Pump' \
+      --output .local-analysis/catalog-compat-new
+  The script refuses an existing destination, verifies every unchanged file,
+  and removes only Microsoft.AspNetCore.App from the COPY's framework list so
+  shipped app-local ASP.NET dependencies are used. Core/WindowsDesktop remain.
+  Otherwise the newer shared ASP.NET dependency overrides the local one and
+  reproduces the old crash. The system/shared framework must not be patched.
+
+  Build the Windows EngineProbe as before, then under Wine run:
+    EngineProbe.dll --data-protection-check <isolated application directory>
+  This tests the exact ASP.NET provider, roundtrip and authentication; it does
+  NOT invoke vendor license checks or establish catalog readiness.
+  Launch the isolated PcPump.dll with original dotnet-windows/dotnet.exe and an
+  authorized DISPLAY. A timeout/running Key Management window is NOT success.
+
+  No catalog passwords or licensing keys were extracted or fabricated; no vendor
+  license result was patched. Manufacturer rows remain unread. This supersedes
+  older claims that native Windows is the only possible next runtime step.
+
+Catalog cryptography compatibility experiment (2026-10-18)
+  Tested Wine's per-application Windows 7 compatibility setting, restoring it
+  after the experiment. .NET SP800108HmacCounterKdf selected its built-in
+  managed fallback and matched an independently computed public HMAC-SHA512
+  vector. No vendor keys/data, licensing logic or cryptographic libraries were
+  replaced. This success does NOT establish catalog readiness.
+
+  Actual unchanged desktop startup still fails in the bundled ASP.NET
+  DataProtection native provider. Its Cryptography.Cng.OSVersionUtil detects
+  Windows 8+ by the presence of BCryptKeyDerivation in bcrypt.dll, not the OS
+  version. Wine exports the function but cannot open SP800_108_CTR_HMAC.
+  Therefore setting Windows compatibility version does NOT solve catalog access.
+  CryptoReadiness now reports native algorithm support, export detection and
+  the independent synthetic KDF result separately, with a failing exit status
+  when native or .NET checks fail. The original desktop error remains recorded
+  in its own log; no manufacturer rows were read in this experiment.
+
+Catalog-only investigation (2026-10-18)
+  Corrected a diagnostic assumption: q5 is the CUSTOM database API; the
+  manufacturer catalog uses q6(string,string), which requests a read-only
+  SQLite connection through q3. Earlier q5 failures were not a direct test
+  of the manufacturer loader. The new --catalog-only mode tests q6 instead.
+
+  The installer distributes TWO distinct catalogs:
+    Database/equipment.db: 2,310,144 bytes (standard)
+    Database_Educational/equipment.db: 245,760 bytes (educational)
+  Neither has a plaintext SQLite header. Do not merge the two or treat the
+  educational file as a decoded/full manufacturer catalog.
+
+  Commands:
+    python3 scripts/catalog-requirements.py \
+      --application '.local-analysis/msi-layout/C-FER Technologies/PC-Pump'
+    bash scripts/run-catalog-probe.sh
+  Inventory: .local-analysis/catalog-requirements.json
+  Execution report: .local-analysis/catalog-only/catalog-only.json
+  The inventory maps 30 model tables and 46 q8 API operations. It contains
+  schema/requirements, NOT equipment rows. All derived data stays ignored.
+  The runtime probe works on copies and verifies original SHA-256 hashes.
+  It queries counts only if the original q6 constructor actually succeeds;
+  undocumented/obfuscated return types retain their original identifiers.
+
+  Actual result: BOTH original q6 attempts fail q6 -> q3.a -> q1.a(bool),
+  where application/security context ace.b() is uninitialized. No equipment
+  collections were returned. The manufacturer loader is NOT independently
+  runnable before normal security setup. The prior desktop run reaches that
+  setup but Wine lacks the required SP800_108_CTR_HMAC cryptographic algorithm.
+  This does not establish license validity/invalidity. No passwords, activation
+  tokens or security singletons are fabricated/extracted/replaced.
+
+  Catalog remains blocked: no manufacturer rows imported into the web app.
+  This work is catalog-only; simulation/UI parity is unchanged.
+
+Latest original-runtime investigation (2026-10-18)
+  Fixed the staging ambiguity: scripts/stage-msi-application.py uses msiinfo
+  exports of the actual File, Component and Directory tables, not assembly
+  identity or cabinet filename guessing. All 309 files were restored with
+  expected lengths and verified SHA-256 copies, including RID/native paths and
+  Database/equipment.db. Registry entries and activation are NOT installed.
+
+  Reproduce staging (requires local msitools/libmsi/libgsf):
+    LD_LIBRARY_PATH="$PWD/.local-analysis/msitools/usr/lib/x86_64-linux-gnu" \
+      python3 scripts/stage-msi-application.py \
+      --msiinfo .local-analysis/msitools/usr/bin/msiinfo \
+      --msi .local-analysis/installer-files/PC-PUMP.msi \
+      --app-files .local-analysis/app-files --output .local-analysis/msi-layout
+  Destination must be empty. Original vendor files remain local and ignored.
+
+  WPF now runs on the local virtual display and enters the original security
+  initialization (f.a -> ace.a -> ac7 -> adj -> ac3). The application's own
+  log records CryptographicException in BCryptAlgorithmHandle.OpenAlgorithmHandle,
+  reached through EphemeralDataProtectionProvider and SP800_108 key derivation.
+  An isolated --crypto-readiness probe confirms Wine 11 opens AES and SHA512,
+  but SP800_108_CTR_HMAC returns 0xC0000002 (STATUS_NOT_IMPLEMENTED).
+  This is a runtime cryptography failure, NOT proof of an invalid license.
+  No cryptographic provider, activation state, security singleton, or vendor
+  code was replaced or bypassed. No guide codes or secret keys are published.
+
+  scripts/local-xkb-path.c relocates only Xvfb's open-source XkbBinDirectory
+  to the workspace keyboard compiler; it does not modify vendor software.
+  scripts/run-local-desktop.sh runs on an existing authorized DISPLAY and
+  enforces a timeout. It reports logs, not simulation success. Example:
+    DISPLAY=:89 DESKTOP_TIMEOUT=60 bash scripts/run-local-desktop.sh
+  Crypto diagnostic after building the Windows probe:
+    EngineProbe.dll --crypto-readiness (run via Windows dotnet.exe under Wine)
+
+  Still unresolved: manufacturer rows have not been read and no complete
+  original simulation has run. Parsed sample analyses are input data only.
+  Execution requires a Windows cryptographic runtime supporting this algorithm,
+  followed by the application's normal authorized security initialization;
+  further blockers may become visible after that. The web engine/UI are not
+  100% vendor parity. This section supersedes older startup-blocker descriptions.
+
 Run
   npm start            -> serves the app at http://localhost:8080 (python3 http.server)
   or simply open index.html in a browser.
