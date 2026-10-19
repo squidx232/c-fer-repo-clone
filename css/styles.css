@@ -43,6 +43,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; color: #7cc4ff; }
 .brand span { color: #fff; }
+.brand-logo { width: 88px; height: 48px; object-fit: contain; border-radius: 4px; }
 .project-name {
   flex: 1; min-width: 160px; max-width: 420px; background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.2); color: #fff; padding: 5px 8px; border-radius: 6px;
@@ -154,7 +155,8 @@ textarea.paste { width: 100%; min-height: 110px; font-family: ui-monospace, mono
 /* off-screen rendering used to capture chart images for the printable report */
 body.report-render #tab-wellbore,
 body.report-render #tab-results,
-body.report-render #tab-curves {
+body.report-render #tab-curves,
+body.report-render #tab-sweep {
   display: block !important; position: absolute; left: -20000px; top: 0; width: 1000px;
   --chart-fg: #24292f; --chart-grid: #e4e8ec; --chart-bg: #ffffff;
 }
