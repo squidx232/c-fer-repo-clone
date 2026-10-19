@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "product": "Sno-P",
+  "trackedDeliverables": {
+    "application": ["index.html", "css/styles.css", "js/app.js", "js/charts.js"],
+    "branding": ["assets/sno-p-logo.png"],
+    "documentation": ["readme.txt", "sno-p-architecture.txt", "repository-contents.json"],
+    "catalogReadiness": ["scripts/check-catalog-host.ps1", "scripts/run-catalog-probe.sh", "scripts/catalog-requirements.py"],
+    "reportTests": ["tests/report.test.js"]
+  },
+  "localOnly": {
+    "directory": ".local-analysis/",
+    "gitIgnored": true,
+    "categories": [
+      "downloaded vendor installer and extracted application/database files",
+      "decompiled analysis artifacts",
+      "local Wine, dotnet, browser and analysis tool installations",
+      "experimental transformed open-source runtime dependencies",
+      "generated screenshots, PDF, logs and diagnostic reports"
+    ],
+    "availableAfterFreshClone": false
+  },
+  "implementationStatus": {
+    "offlineWebApplication": "implemented",
+    "portraitReportCurrentAppCurves": 16,
+    "enterpriseBackend": "proposed architecture only",
+    "windowsHostChecker": "not executed on Windows",
+    "manufacturerCatalog": "unread",
+    "manufacturerRecordsImported": 0,
+    "completeOriginalSimulation": "not executed",
+    "strictCleanRoomProvenance": "not certified; earlier investigation used decompiled artifacts"
+  },
+  "installation": {
+    "development": "npm ci",
+    "preview": "npm start",
+    "webTests": "npm test",
+    "note": "Tracked scripts are included, not automatically installed or provisioned. Local analysis dependencies are not part of a fresh clone."
+  }
+}

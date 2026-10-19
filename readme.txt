@@ -3,6 +3,20 @@ Sno-P - browser-based progressing cavity pump (PCP) system design & analysis
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+Repository delivery inventory (2026-10-19)
+  repository-contents.json lists shipped documentation, branding, readiness tools
+  and their implementation status. These are committed with the web app.
+  assets/sno-p-logo.png is a local app asset, not an external download dependency.
+  readme.txt and sno-p-architecture.txt are tracked documentation; architecture
+  database/API/infrastructure sections are proposals, not installed services.
+  .local-analysis/ is intentionally ignored: vendor files, decompiled artifacts,
+  downloaded analysis runtimes, diagnostic logs and generated PDF/screenshots
+  are NOT included in a clone. Scripts are included, not automatically installed.
+  Fresh clone: npm ci, then npm start; npm test runs web/integration tests.
+  Strict clean-room provenance has NOT been certified: earlier investigation used
+  decompiled artifacts. Blueprint now explicitly separates a behavior-only future
+  implementation track from that investigation and requires provenance review.
+
 Sno-P portrait reporting and supported catalog access (2026-10-19)
   Renamed app/report branding to Sno-P. Supplied logo stored locally in
   assets/sno-p-logo.png so expiring download URL is not a runtime dependency.
