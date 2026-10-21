@@ -141,14 +141,27 @@
 
   // ---------------------------------------------------------------- hydraulics
 
-  /** Frictional pressure gradient (Pa/m) for axial flow in a concentric annulus. */
-  function annulusGradient(Q, rho, mu, tubingId, rodOd) {
+  var DEFAULT_TUBING_ROUGHNESS = 4.5e-5; // m, commercial steel pipe, Moody (1944) chart value
+
+  /**
+   * Frictional pressure gradient (Pa/m) for axial flow in a concentric annulus.
+   * Laminar: exact concentric-annulus solution (e.g. Bird, Stewart & Lightfoot,
+   *   "Transport Phenomena", Eq. 2.4-16), using hydraulic diameter Dh = 2(ro-ri) for Re.
+   * Turbulent: Darcy-Weisbach pressure drop with the Darcy friction factor from the
+   *   Haaland (1983) explicit approximation of the Colebrook-White (1939) equation
+   *   (S.E. Haaland, "Simple and Explicit Formulas for the Friction Factor in Turbulent
+   *   Pipe Flow", ASME J. Fluids Eng. 105(1):89-90), which is valid for a wide Reynolds
+   *   number range and accounts for pipe-wall roughness (Blasius, used previously, is a
+   *   smooth-pipe-only fit limited to Re < ~1e5).
+   */
+  function annulusGradient(Q, rho, mu, tubingId, rodOd, roughness) {
     var ro = tubingId / 2, ri = Math.min(rodOd / 2, ro * 0.999);
     var area = Math.PI * (ro * ro - ri * ri);
     if (Q <= 0 || area <= 0) return { dpdl: 0, re: 0, velocity: 0, regime: 'none' };
     var v = Q / area;
     var dh = 2 * (ro - ri);
     var re = rho * v * dh / mu;
+    var eps = roughness > 0 ? roughness : DEFAULT_TUBING_ROUGHNESS;
     var dpdl;
     var regime;
     if (re < 2100) {
@@ -157,8 +170,10 @@
       dpdl = 8 * mu * Q / (Math.PI * denom);
       regime = 'laminar';
     } else {
-      var f = 0.0791 * Math.pow(re, -0.25); // Fanning, Blasius
-      dpdl = 2 * f * rho * v * v / dh;
+      var relRough = eps / dh;
+      var inner = Math.pow(relRough / 3.7, 1.11) + 6.9 / re;
+      var fD = Math.pow(-1.8 * Math.log(inner) / Math.LN10, -2); // Darcy friction factor
+      dpdl = fD * rho * v * v / (2 * dh);
       regime = 'turbulent';
     }
     return { dpdl: dpdl, re: re, velocity: v, regime: regime };
@@ -302,6 +317,7 @@
         couplingOd: continuous ? d : (s.couplingOd || size.couplingOd),
         massPerLength: continuous ? RHO_STEEL * Math.PI * d * d / 4 : (s.massPerLength || size.massPerLength),
         yieldStrength: grade.yield,
+        tensileStrength: grade.tensile,
         top: top, bottom: top + len, length: len
       });
       top += len;
@@ -320,9 +336,10 @@
   function computePressures(project, fluid, sections, pumpTvd, Q) {
     var prod = project.production;
     var tid = project.wellbore.tubingId;
+    var roughness = project.wellbore.tubingRoughness;
     var fr = 0, maxRe = 0, regime = 'laminar';
     sections.forEach(function (s) {
-      var g = annulusGradient(Q, fluid.density, fluid.viscosity, tid, s.diameter);
+      var g = annulusGradient(Q, fluid.density, fluid.viscosity, tid, s.diameter, roughness);
       fr += g.dpdl * s.length;
       if (g.re > maxRe) { maxRe = g.re; regime = g.regime; }
     });
@@ -398,6 +415,11 @@
     var ic = intakeConditions(project, fluid, pumpTvd);
     if (ic.pumpedOff) warnings.push('Fluid level is at or below the pump: pump is pumped-off (risk of dry running / elastomer burn).');
 
+    var gas = { active: false, fraction: 0, warnings: [] };
+    try { gas = Fluid.freeGasFraction(prod, ic.intake, prod.fluidTemperature || 288.15); }
+    catch (error) { warnings.push('Free-gas screening skipped: ' + error.message); }
+    warnings = warnings.concat(gas.warnings || []);
+
     var op = solveOperatingPoint(project, fluid, sections, pumpTvd, ic.intake, speed);
     var Q = op.flow.actual, dP = op.dP;
     var volEff = op.flow.theoretical > 0 ? Q / op.flow.theoretical : 0;
@@ -413,7 +435,7 @@
     for (var i = 1; i < nodes.length; i++) {
       var ds = nodes[i].md - nodes[i - 1].md;
       var secMid = sectionAt(sections, 0.5 * (nodes[i].md + nodes[i - 1].md));
-      cumFric += annulusGradient(Q, fluid.density, fluid.viscosity, tid, secMid.diameter).dpdl * ds;
+      cumFric += annulusGradient(Q, fluid.density, fluid.viscosity, tid, secMid.diameter, wb.tubingRoughness).dpdl * ds;
       nodes[i].tubingPressure = prod.tubingHeadPressure + fluid.density * G * nodes[i].tvd + cumFric;
     }
     nodes.forEach(function (nd) {
@@ -459,7 +481,16 @@
     nodes[0].sideLoadPerLength = nodes.length > 1 ? nodes[1].sideLoadPerLength : 0;
 
     // --- stresses ---
-    var maxLoad = { ratio: -1 }, maxSide = { value: -1 };
+    // Rotating-bending fatigue (modified-Goodman diagram): PCP rod strings rotate continuously,
+    // so at any fixed point on a rod's surface the wellbore-curvature bending stress reverses
+    // sign every revolution (classic rotating-beam fatigue loading), while axial tension and
+    // torsional shear stay essentially steady at a given operating point. This is combined with
+    // the standard rotating-shaft fatigue approach of Shigley's Mechanical Engineering Design
+    // (Budynas & Nisbett): uncorrected endurance limit Se' = 0.5*Sut for Sut <= 1400 MPa, else
+    // Se' = 700 MPa (Shigley Eq. 6-8); modified-Goodman criterion sigma_a/Se' + sigma_m/Sut = 1/n.
+    // No surface-finish/size/load Marin factors are applied (documented simplification; treat
+    // the resulting ratio as a screening indicator, not a certified fatigue life).
+    var maxLoad = { ratio: -1 }, maxSide = { value: -1 }, maxFatigue = { ratio: -1 };
     var sideWarnCount = 0;
     var effSpacing = spacing > 0 ? spacing : 1;
     nodes.forEach(function (nd) {
@@ -475,8 +506,13 @@
       nd.vonMises = Math.sqrt(sn * sn + 3 * nd.shearStress * nd.shearStress);
       nd.yieldStrength = sec.yieldStrength;
       nd.loadRatio = nd.vonMises / sec.yieldStrength;
+      var tensile = sec.tensileStrength;
+      var endurance = tensile <= 1400e6 ? 0.5 * tensile : 700e6;
+      var sigmaMeq = Math.sqrt(nd.axialStress * nd.axialStress + 3 * nd.shearStress * nd.shearStress);
+      nd.fatigueRatio = nd.bendingStress / endurance + sigmaMeq / tensile;
       nd.sideLoadPerCoupling = nd.sideLoadPerLength * effSpacing;
       if (nd.loadRatio > maxLoad.ratio) maxLoad = { ratio: nd.loadRatio, md: nd.md, tvd: nd.tvd };
+      if (nd.fatigueRatio > maxFatigue.ratio) maxFatigue = { ratio: nd.fatigueRatio, md: nd.md, tvd: nd.tvd };
       if (nd.sideLoadPerCoupling > maxSide.value) maxSide = { value: nd.sideLoadPerCoupling, md: nd.md };
       if (project.limits && nd.sideLoadPerCoupling > project.limits.sideLoadWarn) sideWarnCount++;
     });
@@ -503,6 +539,7 @@
     if (pump.maxSpeed && speed > pump.maxSpeed) warnings.push('Speed exceeds the pump maximum recommended speed (' + pump.maxSpeed + ' rpm).');
     if (maxLoad.ratio > 1) errors.push('Rod string is overloaded: maximum combined stress is ' + (maxLoad.ratio * 100).toFixed(0) + '% of yield.');
     else if (maxLoad.ratio > lim.rodLoadWarn) warnings.push('Rod load ' + (maxLoad.ratio * 100).toFixed(0) + '% of yield exceeds the design limit of ' + (lim.rodLoadWarn * 100).toFixed(0) + '%.');
+    if (maxFatigue.ratio > 1) warnings.push('Rotating-bending fatigue (modified-Goodman) usage is ' + (maxFatigue.ratio * 100).toFixed(0) + '% at ' + maxFatigue.md.toFixed(0) + ' m MD; curvature-induced bending reverses every revolution and may limit rod life below the Goodman line. Screening estimate only (no Marin correction factors).');
     if (sideWarnCount > 0) warnings.push(sideWarnCount + ' calculation node(s) exceed the side-load limit of ' + lim.sideLoadWarn.toFixed(0) + ' N per coupling (rod/tubing wear risk).');
     sections.forEach(function (s) {
       if (s.couplingOd >= wb.tubingId) errors.push('Rod section ' + (s.index + 1) + ' coupling OD does not fit inside the tubing ID.');
@@ -544,7 +581,10 @@
         depthMd: wb.pumpDepth,
         depthTvd: pumpTvd,
         submergence: ic.submergence,
-        fluidLevelTvd: ic.fluidLevelTvd
+        fluidLevelTvd: ic.fluidLevelTvd,
+        freeGasActive: gas.active,
+        freeGasFraction: gas.fraction,
+        solutionGor: gas.solutionGor || 0
       },
       surface: {
         torque: surf.torque,
@@ -559,6 +599,8 @@
       rods: {
         maxLoadRatio: maxLoad.ratio,
         maxLoadMd: maxLoad.md,
+        maxFatigueRatio: maxFatigue.ratio,
+        maxFatigueMd: maxFatigue.md,
         maxSideLoad: maxSide.value,
         maxSideLoadMd: maxSide.md,
         stretch: stretch,
