@@ -927,7 +927,29 @@
     header('Equipment Catalog', 'Load authorized equipment exports in the explicit-SI portable format. This does not decode the original equipment.db.').forEach(function (n) { if (n) panel.appendChild(n); });
     var input = el('textarea', { class: 'paste', 'aria-label': 'Equipment catalog JSON', placeholder: 'Paste schemaVersion 1 equipment catalog JSON' });
     var message = el('p', { role: 'status' });
-    panel.appendChild(card('Import equipment', [input, el('div', { class: 'btn-row' }, [
+    var fileInput = el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Equipment catalog file', onchange: function () {
+      var file = fileInput.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { message.textContent = 'Catalog exceeds 5 MiB limit.'; return; }
+      var reader = new FileReader();
+      reader.onerror = function () { message.textContent = 'Unable to read catalog file.'; };
+      reader.onload = function () {
+        var text = String(reader.result);
+        if (file.name.toLowerCase().endsWith('.db')) {
+          message.textContent = 'Database files cannot be imported directly. Run scripts/extract-equipment-db.py and prepare a verified SI catalog export.';
+          return;
+        }
+        input.value = text;
+        message.textContent = 'File loaded. Review the catalog, then select Import catalog.';
+      };
+      reader.readAsText(file);
+    } });
+    panel.appendChild(card('Source database extraction', [
+      el('p', { text: 'The supplied equipment.db was inspected read-only. No plaintext SQLite header was found; no equipment rows could be extracted. Existing generic equipment remains illustrative, not database-derived.' }),
+      el('a', { href: 'catalogs/equipment-db-report.json', text: 'View database extraction report', target: '_blank', rel: 'noopener' }),
+      el('p', { text: 'To retry with a readable database: python3 scripts/extract-equipment-db.py readable.db --output raw-equipment.json. Raw tables are not simulation-ready: verify units and map them to the SI catalog format before import.' })
+    ]));
+    panel.appendChild(card('Import equipment', [fileInput, input, el('div', { class: 'btn-row' }, [
       el('button', { class: 'btn primary', text: 'Import catalog', onclick: function () {
         try {
           if (input.value.length > 5 * 1024 * 1024) throw new Error('Catalog exceeds 5 MiB limit.');

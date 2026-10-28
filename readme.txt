@@ -3,6 +3,28 @@ Sno-P - browser-based progressing cavity pump (PCP) system design & analysis
 A web clone of the C-FER PC-PUMP style workflow (Jira WA-9). Pure HTML/CSS/JavaScript,
 no build step and no external dependencies; works offline.
 
+equipment.db extraction check (2026-10-28)
+  Root equipment.db matches the requested GitHub source byte-for-byte:
+  2,154,496 bytes; SHA-256
+  1cd3fa11f639c6fd6ab9e2487097e2e3b1039afe60d73039f6243a4f1b532d77.
+  Read-only SQLite query returned "file is not a database"; no plaintext SQLite
+  header exists. ZERO manufacturer records were extracted or added to simulation.
+  catalogs/equipment-db-report.json records this result, linked in Equipment Catalog.
+  No encryption key or application-managed security context is included here.
+  Required next input: a readable database copy or an authorized equipment export.
+
+  Read-only extractor for readable SQLite databases (Python standard library):
+    python3 scripts/extract-equipment-db.py readable.db --output raw-equipment.json
+  Exports table schemas, column names and raw rows; blobs are base64 envelopes.
+  It refuses source overwrite, limits total rows (default 100000), and emits exit
+  code 2 with a diagnostic report for encrypted/unrecognized or corrupt databases.
+  Raw exports have NO assumed units and are NOT directly simulation-ready. Map
+  verified specifications to schemaVersion 1, units SI using Show catalog format.
+  Equipment Catalog now accepts a local JSON file in addition to pasted JSON;
+  review then Import catalog to validate and persist in the project library.
+  Existing illustrative defaults and published datasheet estimates are NOT records
+  extracted from equipment.db. No vendor records were invented to fill the gap.
+
 Repository delivery inventory (2026-10-19)
   repository-contents.json lists shipped documentation, branding, readiness tools
   and their implementation status. These are committed with the web app.
