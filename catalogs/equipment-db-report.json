@@ -1,0 +1,12 @@
+{
+  "reportVersion": 1,
+  "source": "equipment.db",
+  "bytes": 2154496,
+  "sha256": "1cd3fa11f639c6fd6ab9e2487097e2e3b1039afe60d73039f6243a4f1b532d77",
+  "plaintextSqliteHeader": false,
+  "status": "blocked-non-sqlite",
+  "extractedRows": 0,
+  "tables": [],
+  "simulationReady": false,
+  "message": "No plaintext SQLite header. This file cannot be decoded by the standard SQLite reader. The existing vendor investigation identifies an application-managed encrypted catalog; use an authorized application export or a readable database copy. No equipment records extracted."
+}

@@ -175,6 +175,39 @@ test('catalog screen imports authorized SI specs, rejects duplicates and persist
   } finally { dom.window.close(); }
 });
 
+test('catalog file picker stages verified JSON before importing and reports blocked database extraction', async () => {
+  const {dom, w, errors} = boot();
+  try {
+    // Let jsdom's automatic DOMContentLoaded settle after boot's explicit initialization.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    w.PCPApp.activate('equipment');
+    assert.match(w.document.querySelector('#tab-equipment').textContent, /no equipment rows could be extracted/);
+    assert.equal(w.document.querySelector('#tab-equipment a').getAttribute('href'), 'catalogs/equipment-db-report.json');
+    const catalog = {schemaVersion: 1, units: 'SI', provenance: {source: 'synthetic file test'},
+      rodGrades: [{id: 'file-grade', name: 'Test grade', yield: 600e6, tensile: 900e6}]};
+    const picker = w.document.querySelector('[aria-label="Equipment catalog file"]');
+    const stage = async (name, text) => {
+      Object.defineProperty(picker, 'files', {configurable: true, value: [new w.File([text], name)]});
+      picker.dispatchEvent(new w.Event('change'));
+      for (let i = 0; i < 100; i++) {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        if (w.document.querySelector('#tab-equipment [role="status"]').textContent) return;
+      }
+      assert.fail('FileReader did not complete');
+    };
+    await stage('equipment.db', 'not plaintext');
+    assert.match(w.document.querySelector('#tab-equipment [role="status"]').textContent, /cannot be imported directly/);
+    w.document.querySelector('#tab-equipment [role="status"]').textContent = '';
+    await stage('equipment.json', JSON.stringify(catalog));
+    assert.equal(w.PCPApp.state.project.equipmentLibrary, undefined);
+    assert.match(w.document.querySelector('[aria-label="Equipment catalog JSON"]').value, /file-grade/);
+    [...w.document.querySelectorAll('#tab-equipment button')].find(b => b.textContent === 'Import catalog').click();
+    assert.equal(w.PCPApp.state.project.equipmentLibrary.rodGrades[0].id, 'file-grade');
+    assert.equal(JSON.parse(w.localStorage.getItem('pcp-designer-project-v1')).equipmentLibrary.imports[0].source, 'synthetic file test');
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
 test('legacy projects retain results and new settings survive report generation', () => {
   const {dom, w, errors} = boot();
   try {
